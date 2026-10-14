@@ -12,7 +12,8 @@ export async function connect(): Promise<pg.Client> {
 
 // auth.users 에 테스트 사용자를 만든다(트랜잭션 안에서 쓰면 테스트 끝에 사라진다).
 export async function createUser(client: pg.Client, email = `user-${crypto.randomUUID()}@example.com`): Promise<string> {
-  const { rows } = await client.query<{ id: string }>("insert into auth.users (email) values ($1) returning id", [email]);
+  // 실제 Supabase 의 auth.users.id 에는 기본값이 없어 직접 만든다.
+  const { rows } = await client.query<{ id: string }>("insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id", [email]);
   return rows[0].id;
 }
 
