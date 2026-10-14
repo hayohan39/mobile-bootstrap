@@ -25,3 +25,15 @@ export async function actAs(client: pg.Client, userId: string | null): Promise<v
   await client.query(`select set_config('request.jwt.claims', $1, true)`, [claims]);
   await client.query(`set local role ${role}`);
 }
+
+// RLS·권한이 막아야 하는 쿼리. 트랜잭션 안에서 실패해도 이어서 테스트할 수 있게 savepoint 로 감싼다.
+export async function expectDenied(client: pg.Client, sql: string, params: unknown[] = []): Promise<void> {
+  await client.query("savepoint denied");
+  try {
+    await client.query(sql, params);
+  } catch {
+    await client.query("rollback to savepoint denied");
+    return;
+  }
+  throw new Error(`막혀야 하는 쿼리가 실행됐다: ${sql}`);
+}
