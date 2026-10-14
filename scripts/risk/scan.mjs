@@ -83,13 +83,45 @@ export function parseUnifiedDiff(text) {
 // ---------------------------------------------------------------------------
 // SQL 분류
 
+/**
+ * SQL 을 문장 단위로 나눈다. 주석은 지우고, 문자열('...')과 달러 인용($$...$$, $tag$...$tag$) 안의 ';' 에서는
+ * 나누지 않는다 — 함수 본문(plpgsql 의 begin ... end;)이 별개의 문장으로 오인되지 않게.
+ */
 export function splitSql(sql) {
-  return sql
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
-    .replace(/--[^\n]*/g, ' ')
-    .split(';')
-    .map((s) => s.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+  const out = [];
+  let current = '';
+  for (let i = 0; i < sql.length; ) {
+    const rest = sql.slice(i);
+    let m;
+    if (rest.startsWith('--')) {
+      const end = sql.indexOf('\n', i);
+      i = end === -1 ? sql.length : end;
+      current += ' ';
+    } else if (rest.startsWith('/*')) {
+      const end = sql.indexOf('*/', i + 2);
+      i = end === -1 ? sql.length : end + 2;
+      current += ' ';
+    } else if (rest[0] === "'") {
+      let j = i + 1;
+      while (j < sql.length && !(sql[j] === "'" && sql[j + 1] !== "'")) j += sql[j] === "'" ? 2 : 1;
+      current += sql.slice(i, j + 1);
+      i = j + 1;
+    } else if ((m = rest.match(/^\$[A-Za-z_]*\$/))) {
+      const end = sql.indexOf(m[0], i + m[0].length);
+      const stop = end === -1 ? sql.length : end + m[0].length;
+      current += sql.slice(i, stop);
+      i = stop;
+    } else if (rest[0] === ';') {
+      out.push(current);
+      current = '';
+      i += 1;
+    } else {
+      current += rest[0];
+      i += 1;
+    }
+  }
+  out.push(current);
+  return out.map((s) => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
 }
 
 const ident = (raw) => raw.replace(/"/g, '').split('.').pop().toLowerCase();

@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { canAccept, runScan } from "../scripts/risk/cli.mjs";
 import { bandLevel, toAnchor } from "../scripts/risk/levels.mjs";
 import { decodeData, previewCell, renderSummary } from "../scripts/risk/render.mjs";
-import { analyzeAppConfig, categorize, classifyStatement, globToRegExp, isNativePackage, parseUnifiedDiff, scanChanges, tablesWithoutRls } from "../scripts/risk/scan.mjs";
+import { analyzeAppConfig, categorize, classifyStatement, globToRegExp, isNativePackage, parseUnifiedDiff, scanChanges, splitSql, tablesWithoutRls } from "../scripts/risk/scan.mjs";
 import { applyPolicy, finalize, sectionFilled } from "../scripts/risk/score.mjs";
 
 const config = JSON.parse(await readFile(path.resolve(".github/risk/config.json"), "utf8"));
@@ -91,6 +91,24 @@ describe("parseUnifiedDiff", () => {
     expect(files[0]).toMatchObject({ path: "src/a.ts", status: "M", added: [{ line: 10, text: "new1" }, { line: 11, text: "new2" }] });
     expect(files[1]).toMatchObject({ path: "migrations/1.sql", status: "A" });
     expect(files[2]).toMatchObject({ path: "src/new.ts", oldPath: "src/old.ts", status: "R" });
+  });
+});
+
+describe("splitSql", () => {
+  it("함수 본문·문자열 안의 ; 와 주석은 문장을 나누지 않는다", () => {
+    const sql = [
+      "-- 주석; 무시",
+      "create function f() returns trigger language plpgsql as $$",
+      "begin insert into t values (1); return new; end;",
+      "$$;",
+      "insert into t (a) values ('x;y'), ('it''s');",
+      "create function g() returns int language sql as $body$ select 1; $body$; /* 끝; */",
+    ].join("\n");
+    const parts = splitSql(sql);
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toMatch(/^create function f\(\).*end; \$\$$/);
+    expect(parts[1]).toBe("insert into t (a) values ('x;y'), ('it''s')");
+    expect(classifyStatement(parts[0])).toEqual([{ kind: "additive" }]);
   });
 });
 
@@ -206,6 +224,8 @@ describe("scanChanges", () => {
     );
     expect(result.floors).toMatchObject({ security: 10, compatibility: 15, testing: 10, migration: 10 });
     expect(result.signals.find((x: { id: string }) => x.id === "config.new-env").message).toContain("Supabase secret");
+    const platformEnv = scan([{ path: "supabase/functions/x/index.ts", added: ['const url = Deno.env.get("SUPABASE_URL");'] }]);
+    expect(ids(platformEnv)).not.toContain("config.new-env");
     expect(result.overrideLevel).toBe("HIGH");
   });
 
