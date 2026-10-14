@@ -1,0 +1,81 @@
+name: Rollout monitor
+
+# 매일 production OTA 롤아웃을 본다. Sentry 의 production crash-free 세션 비율(최근 24시간)이
+#   - 좋으면 다음 단계로(10 → 50 → 100%),
+#   - 나쁘면 롤아웃을 취소하고 이슈를 연다(사람이 원인 확인 → 수정 PR → 다시 출시),
+#   - 데이터가 적거나 Sentry 가 없으면 그대로 둔다(세션에서 "롤아웃 50% 로 올려줘" 로 수동 진행).
+# 기준: ROLLOUT_HALT_BELOW(0.99) · ROLLOUT_ADVANCE_ABOVE(0.995) · ROLLOUT_MIN_SESSIONS(30) 변수.
+on:
+  schedule:
+    - cron: "17 1 * * *" # 매일 10:17 KST
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  monitor:
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+      ROLLOUT_HALT_BELOW: ${{ vars.ROLLOUT_HALT_BELOW || '0.99' }}
+      ROLLOUT_ADVANCE_ABOVE: ${{ vars.ROLLOUT_ADVANCE_ABOVE || '0.995' }}
+      ROLLOUT_MIN_SESSIONS: ${{ vars.ROLLOUT_MIN_SESSIONS || '30' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check configuration
+        id: guard
+        run: |
+          if [ -z "$EXPO_TOKEN" ] || ! node -e 'process.exit(require("./app.json").expo?.extra?.eas?.projectId ? 0 : 1)'; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"; echo "프로비저닝 전 — 건너뜀" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        if: steps.guard.outputs.ready == 'true'
+        run: npm ci
+
+      - uses: expo/expo-github-action@v9
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          eas-version: ${{ vars.EAS_CLI_VERSION || 'latest' }}
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Check rollout health
+        id: monitor
+        if: steps.guard.outputs.ready == 'true'
+        run: node scripts/release.mjs monitor --platforms "${{ vars.EAS_PLATFORMS || 'android' }}" --report report.md
+
+      - name: Open an incident issue
+        if: steps.monitor.outputs.halted == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body=$(printf '%s\n\n오류율이 기준을 넘어 OTA 롤아웃을 자동으로 취소했습니다. 이미 받은 사용자도 다음 실행 때 이전 업데이트로 돌아갑니다.\n\n다음: Sentry 에서 원인 확인 → 수정 PR → 스테이징 확인 → 다시 출시. 절차는 `docs/runbook.md`.\n\n[실행 로그](%s)' "$(cat report.md)" "$RUN_URL")
+          gh issue create --title "🛑 OTA 롤아웃 자동 중단 ($(date -u +%F))" --body "$body"
