@@ -334,9 +334,15 @@ jobs:
 
       - name: Build release APK
         id: apk
+        timeout-minutes: 40
         run: |
           npx expo prebuild --platform android --no-install --clean
-          (cd android && ./gradlew assembleRelease --no-daemon)
+          # 기본값(힙 2GB·Metaspace 512MB)으로는 Metaspace 가 모자라 빌드가 멈춘다. 러너는 16GB.
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=2g/' android/gradle.properties
+          # 에뮬레이터 검사용 APK 라 release lint 는 끈다(스토어 빌드는 EAS 가 따로 한다).
+          printf '\nandroid { lint { checkReleaseBuilds = false } }\n' >> android/app/build.gradle
+          # 에뮬레이터(x86_64) 아키텍처만 빌드한다.
+          (cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64)
           echo "app_id=$(node -p 'require("./app.json").expo.android.package')" >> "$GITHUB_OUTPUT"
 
       - name: Enable KVM
