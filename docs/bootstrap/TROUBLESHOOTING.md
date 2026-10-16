@@ -16,7 +16,9 @@
 **요약에 "DB 비밀번호를 모릅니다"** — 이미 있던 Supabase 프로젝트를 재사용했다. Supabase → Connect → **Session pooler**
 연결 문자열(비밀번호 포함)을 새 리포지토리 시크릿 `SUPABASE_DB_URL` 에. 비밀번호를 모르면 Database → Settings 에서 재설정.
 
-**EAS 프로젝트 연결 실패** — `EXPO_TOKEN`(로봇 토큰의 역할이 Developer 이상인지), `EXPO_ACCOUNT`(계정/조직 이름)가 맞는지.
+**EAS 프로젝트 연결 실패** — `EXPO_TOKEN`(로봇 토큰의 역할이 Developer 이상인지), `EXPO_ACCOUNT` 가 로봇이 속한 **조직** 이름인지.
+`You do not have access to the "<이름>" account. Accounts you have permissions to create projects in: <조직>` 이면
+템플릿 변수 `EXPO_ACCOUNT` 를 `<조직>` 으로 바꾼다.
 고친 뒤 같은 이름으로 재실행하면 초기화는 건너뛰고 EAS 연결만 한다.
 
 **`Protect main` 실패** — 비공개 리포의 브랜치 규칙은 GitHub Pro 가 필요하다. [SETUP.md](SETUP.md) 8번.

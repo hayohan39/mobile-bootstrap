@@ -35,6 +35,9 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/jest"
         update-types: ["version-update:semver-major"]
+      # eslint-config-expo 가 지원하는 ESLint 메이저를 따른다(ESLint 10 은 eslint-plugin-react 가 깨진다).
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
       # 런타임이 Node 22(.nvmrc)라서 타입도 22 에 맞춘다. 런타임을 올릴 때 같이 올린다.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
