@@ -32,10 +32,10 @@ https://github.com/apps/claude → Configure → Repository access → **All rep
 
 1. https://expo.dev 가입.
 2. expo.dev → Account settings → Access tokens → **Robot user** 를 만들고(역할 Developer 이상) 토큰을 발급 → 시크릿 `EXPO_TOKEN`.
+   로봇 토큰은 사람 계정 비밀번호와 분리돼 있어, 새면 그 토큰만 지우면 된다.
 3. 변수 `EXPO_ACCOUNT` = **로봇이 속한 조직 이름**. 로봇 사용자는 조직에만 만들 수 있어서, 개인 계정에서 만들면
    Expo 가 조직(예: `hayohan39s-team`)을 만들어 그 안에 둔다. 개인 계정 이름(`hayohan39`)을 넣으면
    `You do not have access to the "hayohan39" account` 로 EAS 연결이 실패한다 — 그 오류 메시지 끝에 나오는 이름을 넣으면 된다.
-   로봇 토큰은 사람 계정 비밀번호와 분리돼 있어, 새면 그 토큰만 지우면 된다.
 
 ## 4. Supabase 토큰
 
