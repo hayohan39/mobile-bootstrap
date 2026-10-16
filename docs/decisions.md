@@ -18,8 +18,10 @@
 
 첫 기능을 만들기 전에 정한다.
 
-- **로그인이 필요한가** — 필요 없으면(오프라인 학습 앱·싱글 게임) 로그인·계정 삭제 화면을 뺀다.
-  필요하면 방식: 이메일 OTP / Apple / Google (Apple 4.8: 소셜 로그인을 넣으면 Apple 로그인도).
+- **로그인이 필요한가** — 템플릿 기본은 이메일 코드 로그인 + 계정 삭제. 필요 없으면(오프라인 학습 앱·싱글 게임) 뺀다.
+  소셜 로그인(Apple·Google·카카오)을 켤지 — `docs/recipes/auth.md` (Apple 4.8: 소셜 로그인을 넣으면 Apple 로그인도).
+- **메일 발송(SMTP)** — 출시 전에 필요(Supabase 기본 메일은 시간당 몇 통). 후보: Resend / AWS SES.
+- **운영자 문의 이메일** — `src/lib/project.ts` 의 `supportEmail`(개인정보처리방침·스토어 필수).
 - **수익화** — 없음 / 인앱결제·구독(RevenueCat) / 광고(AdMob). `docs/recipes/monetization.md`.
 - **스토어 계정 형태** — Google Play 개인 계정(첫 출시 전 12명·14일 비공개 테스트 필요) / 조직 계정(D-U-N-S 필요).
 - **최소 지원 OS** — 기본값(Expo SDK 57 기준)을 쓸지, 더 높일지.

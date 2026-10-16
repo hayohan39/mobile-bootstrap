@@ -20,6 +20,8 @@ export const supabase: SupabaseClient | null =
           autoRefreshToken: !isServer,
           persistSession: !isServer,
           detectSessionInUrl: Platform.OS === "web" && !isServer,
+          // 소셜 로그인은 앱으로 code 를 돌려받아 교환한다(PKCE). 토큰이 URL 에 실리지 않는다.
+          flowType: "pkce",
         },
       })
     : null;

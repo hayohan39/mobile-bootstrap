@@ -4,4 +4,5 @@ module.exports = {
   roots: ["<rootDir>/src"],
   testMatch: ["**/*.test.tsx", "**/*.test.ts"],
   testPathIgnorePatterns: ["/node_modules/", "<rootDir>/src/app/"],
+  setupFiles: ["<rootDir>/jest.setup.js"],
 };

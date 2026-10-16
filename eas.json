@@ -1,0 +1,43 @@
+{
+  "cli": {
+    "version": ">= 24.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "environment": "development",
+      "env": { "SENTRY_ALLOW_FAILURE": "true" },
+      "android": { "buildType": "apk" }
+    },
+    "staging": {
+      "channel": "staging",
+      "environment": "preview",
+      "env": { "SENTRY_ALLOW_FAILURE": "true" },
+      "autoIncrement": true,
+      "android": { "distribution": "internal", "buildType": "apk" },
+      "ios": { "distribution": "store" }
+    },
+    "production": {
+      "channel": "production",
+      "environment": "production",
+      "env": { "SENTRY_ALLOW_FAILURE": "true" },
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "staging": {
+      "ios": {}
+    },
+    "production": {
+      "android": {
+        "track": "production",
+        "releaseStatus": "inProgress",
+        "rollout": 0.1
+      },
+      "ios": {}
+    }
+  }
+}

@@ -12,7 +12,8 @@ export async function connect(): Promise<pg.Client> {
 
 // auth.users 에 테스트 사용자를 만든다(트랜잭션 안에서 쓰면 테스트 끝에 사라진다).
 export async function createUser(client: pg.Client, email = `user-${crypto.randomUUID()}@example.com`): Promise<string> {
-  const { rows } = await client.query<{ id: string }>("insert into auth.users (email) values ($1) returning id", [email]);
+  // 실제 Supabase 의 auth.users.id 에는 기본값이 없어 직접 만든다.
+  const { rows } = await client.query<{ id: string }>("insert into auth.users (id, email) values (gen_random_uuid(), $1) returning id", [email]);
   return rows[0].id;
 }
 
@@ -23,4 +24,16 @@ export async function actAs(client: pg.Client, userId: string | null): Promise<v
   const claims = JSON.stringify(userId ? { sub: userId, role } : { role });
   await client.query(`select set_config('request.jwt.claims', $1, true)`, [claims]);
   await client.query(`set local role ${role}`);
+}
+
+// RLS·권한이 막아야 하는 쿼리. 트랜잭션 안에서 실패해도 이어서 테스트할 수 있게 savepoint 로 감싼다.
+export async function expectDenied(client: pg.Client, sql: string, params: unknown[] = []): Promise<void> {
+  await client.query("savepoint denied");
+  try {
+    await client.query(sql, params);
+  } catch {
+    await client.query("rollback to savepoint denied");
+    return;
+  }
+  throw new Error(`막혀야 하는 쿼리가 실행됐다: ${sql}`);
 }

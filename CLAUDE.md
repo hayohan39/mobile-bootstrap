@@ -100,7 +100,7 @@ PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네
 `docs/runbook.md` 를 따른다. **먼저 복구, 원인은 나중.**
 - OTA 로 나간 JS 문제: `node scripts/gh.mjs dispatch rollback.yml reason="..."` → 직전 업데이트로 되돌린다(몇 분).
 - 스토어 빌드 문제: 되돌릴 수 없다. Play 단계적 출시 중지·App Store 단계적 출시 일시정지(사용자가 콘솔에서), 그리고
-  **원격 킬스위치**(기능 끄기)·**최소 지원 버전**(강제 업데이트) 을 쓰고 핫픽스를 낸다.
+  **원격 킬스위치**(기능 끄기)·**최소 지원 버전**(강제 업데이트) 을 쓰고 핫픽스를 낸다 — `docs/recipes/remote-config.md`.
 - DB 복구(백업/PITR)는 데이터에 영향이 크므로 절차를 설명하고 사용자의 결정을 받는다.
 
 ## 개발 상황을 물으면
@@ -141,6 +141,9 @@ PR 닫힘 ─► preview-cleanup.yml  EAS Update 의 pr-<n> 브랜치 정리
 - 백엔드: Supabase — Postgres(RLS) + Auth + Storage + Realtime + Edge Functions(`supabase/functions`, Deno).
   클라이언트는 `src/lib/supabase.ts`. 오프라인 우선 데이터는 `expo-sqlite`(`docs/recipes/offline-sync.md`).
 - 관측: Sentry(`@sentry/react-native`, DSN 이 있을 때만), 구조화 로그 `src/lib/log.ts`, 앱 정보(`src/lib/build-info.ts`).
+- 기본 기능(이미 있음): 이메일 코드 로그인 + Apple/Google(설정 후 켬) `src/lib/auth.tsx`, 계정 삭제(앱·웹 + Edge Function
+  `delete-account`), 푸시 토큰 `src/lib/push.ts`, 원격 설정(킬스위치·최소 지원 버전·점검) `src/lib/app-config.ts` + `AppGate`,
+  정책 페이지 `/privacy`·`/terms`·`/delete-account`(웹 export 로 공개 URL). 공용 컴포넌트 `Screen`·`Text`·`Button`·`TextField`.
 - 테스트: vitest(`test/**` — 순수 로직·스크립트·DB/RLS), jest-expo + Testing Library(`src/**/*.test.tsx` — 화면),
   Playwright(`e2e/web` — 웹 export 스모크), Maestro(`.maestro/` — CI 의 Android 에뮬레이터).
 - Node 22 (`.nvmrc`). 확정된 인프라와 이유는 `docs/decisions.md`.
@@ -165,7 +168,7 @@ PR 닫힘 ─► preview-cleanup.yml  EAS Update 의 pr-<n> 브랜치 정리
 
 자세한 체크리스트는 `docs/STORE-LAUNCH.md`. 기능을 만들 때 걸리는 것:
 
-- **로그인**: 소셜 로그인(Google 등)을 넣으면 **Sign in with Apple 도** 넣는다(Apple 4.8).
+- **로그인**: 소셜 로그인(Google 등)을 넣으면 **Sign in with Apple 도** 넣는다(Apple 4.8) — `docs/recipes/auth.md`.
 - **계정 삭제**: 가입이 있으면 앱 안에서 **계정 삭제**가 가능해야 하고(Apple 5.1.1(v)), Google 은 **웹 삭제 링크**도 요구한다.
 - **사용자 생성 콘텐츠**(글·댓글·사진·채팅): 신고·차단·필터·운영자 연락처가 필수(Apple 1.2) — `docs/recipes/ugc-moderation.md`.
 - **디지털 상품·구독**은 인앱결제(IAP)만(Apple 3.1.1, Google Play 결제 정책). 실물·숙박 예약은 외부 결제 가능 — `docs/recipes/monetization.md`.
