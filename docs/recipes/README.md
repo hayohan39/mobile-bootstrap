@@ -11,7 +11,13 @@
 | [location.md](location.md) | 근처·동네·지도 | 위치정보법, 권한 문구 |
 | [offline-sync.md](offline-sync.md) | 오프라인 우선 (Anki 류) | — |
 
-템플릿에 이미 들어 있는 것(로그인·계정 삭제·푸시 토큰·강제 업데이트·킬스위치)은 코드와 `CLAUDE.md` 를 본다.
+템플릿에 이미 들어 있는 것의 설정·확장:
+
+| 레시피 | 내용 |
+| --- | --- |
+| [auth.md](auth.md) | 이메일 코드(기본) · Apple · Google · 카카오 로그인 켜기, SMTP, 심사용 계정 |
+| [push.md](push.md) | iOS/Android 푸시 키(FCM), 서버에서 보내기, 수신 동의 |
+| [remote-config.md](remote-config.md) | 킬스위치 · 최소 지원 버전(강제 업데이트) · 점검 |
 
 공통 원칙
 - 네이티브 모듈을 추가하는 레시피는 **네이티브 변경**이다 — 그 모듈만 넣는 작은 PR 을 먼저(새 스테이징 빌드),
