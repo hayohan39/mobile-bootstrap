@@ -1,0 +1,13 @@
+# Android 에뮬레이터에서 실제 앱(release 빌드)이 뜨는지 보는 최소 흐름. CI 의 e2e job 이 돌린다.
+# appId 는 CI 가 app.json 의 android.package 로 넘긴다(-e APP_ID=...).
+# 기능을 추가하면 그 핵심 흐름을 별도 파일(.maestro/*.yaml)로 더한다.
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "app-title"
+    timeout: 30000
+- assertVisible:
+    id: "build-info"

@@ -1,0 +1,103 @@
+{
+  "$comment": "scripts/risk/scan.mjs 가 쓰는 경로 분류. 프로젝트 구조가 바뀌면 여기를 고친다. 이 파일을 바꾸는 PR 은 리스크 평가 자체를 바꾸므로 최소 VERY HIGH 로 평가된다.",
+  "paths": {
+    "docs": [
+      "**/*.md",
+      "docs/**",
+      "LICENSE",
+      ".editorconfig",
+      ".gitattributes"
+    ],
+    "tooling": [
+      ".claude/**",
+      ".vscode/**",
+      "eslint.config.js"
+    ],
+    "test": [
+      "test/**",
+      "e2e/**",
+      ".maestro/**",
+      "**/*.test.ts",
+      "**/*.test.tsx",
+      "**/*.spec.ts",
+      "vitest.config.mts",
+      "jest.config.js",
+      "playwright.config.ts",
+      "supabase/local-shim.sql",
+      "supabase/seed.sql",
+      "scripts/serve-dist.mjs"
+    ],
+    "migration": [
+      "supabase/migrations/**/*.sql"
+    ],
+    "riskSystem": [
+      ".github/risk/**",
+      "scripts/risk/**",
+      ".github/workflows/pr-review.yml",
+      ".github/workflows/risk-gate.yml"
+    ],
+    "infra": [
+      ".github/workflows/**",
+      ".github/dependabot.yml",
+      "eas.json",
+      "supabase/config.toml",
+      "metro.config.js",
+      "babel.config.js",
+      "scripts/release.mjs",
+      "scripts/fingerprint.mjs",
+      "scripts/db.mjs",
+      "scripts/session-start.sh"
+    ],
+    "native": [
+      "app.json",
+      "app.config.*",
+      "plugins/**",
+      "assets/images/icon.png",
+      "assets/images/splash-icon.png",
+      "assets/images/android-icon-*.png"
+    ],
+    "sharedCore": [
+      "src/app/_layout.tsx",
+      "src/app/+not-found.tsx",
+      "src/lib/supabase.ts",
+      "src/lib/env.ts",
+      "src/lib/log.ts",
+      "src/lib/sentry.ts",
+      "src/lib/build-info.ts",
+      "src/lib/app-config.ts",
+      "src/components/screen.tsx",
+      "src/constants/theme.ts"
+    ],
+    "auth": [
+      "src/**/auth/**",
+      "src/**/*auth*",
+      "src/**/*session*",
+      "src/**/*permission*",
+      "src/app/(auth)/**",
+      "supabase/functions/**/*auth*",
+      "supabase/functions/delete-account/**"
+    ],
+    "api": [
+      "supabase/functions/**"
+    ],
+    "page": [
+      "src/app/**/*.tsx"
+    ],
+    "deps": [
+      "package.json",
+      "package-lock.json"
+    ]
+  },
+  "ignoreEnv": [
+    "NODE_ENV",
+    "CI",
+    "EXPO_OS",
+    "EXPO_PUBLIC_COMMIT_SHA",
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SUPABASE_DB_URL",
+    "SUPABASE_PUBLISHABLE_KEYS",
+    "SUPABASE_SECRET_KEYS"
+  ]
+}
