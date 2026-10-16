@@ -9,11 +9,13 @@
       "distribution": "internal",
       "channel": "development",
       "environment": "development",
+      "env": { "SENTRY_ALLOW_FAILURE": "true" },
       "android": { "buildType": "apk" }
     },
     "staging": {
       "channel": "staging",
       "environment": "preview",
+      "env": { "SENTRY_ALLOW_FAILURE": "true" },
       "autoIncrement": true,
       "android": { "distribution": "internal", "buildType": "apk" },
       "ios": { "distribution": "store" }
@@ -21,6 +23,7 @@
     "production": {
       "channel": "production",
       "environment": "production",
+      "env": { "SENTRY_ALLOW_FAILURE": "true" },
       "autoIncrement": true
     }
   },

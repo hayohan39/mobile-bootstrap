@@ -311,6 +311,8 @@ jobs:
     timeout-minutes: 60
     env:
       EXPO_PUBLIC_COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+      # 이 APK 는 에뮬레이터 검사용이라 Sentry 소스맵을 올리지 않는다(토큰이 없으면 빌드가 실패한다).
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
     steps:
       - uses: actions/checkout@v7
 
@@ -319,11 +321,13 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # android/ 는 prebuild 가 만들므로 gradle 파일 대신 package-lock.json(네이티브 의존성)으로 캐시 키를 만든다.
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
+          cache-dependency-path: package-lock.json
 
       - name: Install
         run: npm ci
