@@ -1,0 +1,65 @@
+name: Rollback
+
+# production OTA 를 직전 상태로 되돌린다(롤아웃 중이면 롤아웃 취소). 몇 분 안에 사용자 앱에 반영된다.
+# 스토어 빌드(네이티브)는 되돌릴 수 없다 — docs/runbook.md 의 "스토어 빌드 문제" 절차를 따른다.
+# DB 는 되돌리지 않는다.
+#
+# 세션에서: node scripts/gh.mjs dispatch rollback.yml reason="로그인 화면 크래시"
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "왜 되돌리나(기록용)"
+        required: true
+      platforms:
+        description: "android | ios | all (비우면 EAS_PLATFORMS 변수)"
+        required: false
+        default: ""
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  rollback:
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: ${{ vars.EAS_CLI_VERSION || 'latest' }}
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Roll back production OTA
+        env:
+          PLATFORMS: ${{ inputs.platforms || vars.EAS_PLATFORMS || 'android' }}
+          REASON: ${{ inputs.reason }}
+        run: |
+          echo "사유: $REASON" >> "$GITHUB_STEP_SUMMARY"
+          node scripts/release.mjs rollback --platforms "$PLATFORMS"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "DB 는 그대로입니다. 원인을 고치는 PR 을 올리고, 다시 출시하세요." >> "$GITHUB_STEP_SUMMARY"

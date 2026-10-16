@@ -1,0 +1,202 @@
+name: Deploy (staging)
+
+# merge(main push) = 스테이징 배포. 사용자에게 내보내는 출시는 release.yml(사람의 요청)로 따로 한다.
+#
+#   database  프로덕션 Supabase 에 마이그레이션(supabase db push) → Edge Functions 배포
+#             (스테이징 앱과 프로덕션 앱이 같은 DB 를 쓴다 — 그래서 마이그레이션은 expand → contract)
+#   app       플랫폼마다: 지금 코드와 fingerprint 가 같은 스테이징 빌드가 있으면 OTA(channel staging),
+#             없으면 스테이징 빌드를 새로 만든다(Android 내부 배포 APK / iOS TestFlight)
+#   report    merge 된 PR 에 결과 코멘트 (📦 OTA · 🧱 새 빌드 · ❌ 실패 · ⏭️ 건너뜀)
+#
+# 설정이 없으면(프로비저닝 전, 템플릿 리포지토리) 실패가 아니라 건너뛴다 — main 이 빨갛게 되지 않게.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  database:
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    outputs:
+      result: ${{ steps.result.outputs.value }}
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check configuration
+        id: guard
+        run: |
+          migrations=$(ls supabase/migrations/*.sql 2>/dev/null | wc -l | tr -d ' ')
+          functions=$(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts -not -path '*/_*' 2>/dev/null | wc -l | tr -d ' ')
+          echo "migrations=$migrations" >> "$GITHUB_OUTPUT"
+          echo "functions=$functions" >> "$GITHUB_OUTPUT"
+          if [ "$migrations" = 0 ] && [ "$functions" = 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"; echo "DB 변경 없음(마이그레이션·Edge Function 없음)." >> "$GITHUB_STEP_SUMMARY"
+          elif [ -z "$SUPABASE_DB_URL" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### ⏭️ DB 배포 건너뜀 — SUPABASE_DB_URL 시크릿이 없습니다(프로비저닝 전)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        if: steps.guard.outputs.ready == 'true'
+        run: npm ci
+
+      # 어떤 마이그레이션이 새로 들어가는지 로그에 남긴다(연결 문자열은 출력하지 않는다).
+      - name: Pending migrations
+        if: steps.guard.outputs.ready == 'true' && steps.guard.outputs.migrations != '0'
+        run: npx supabase migration list --db-url "$SUPABASE_DB_URL"
+
+      # --include-all: 병렬 PR 이 순서와 다르게 merge 되어 더 이른 타임스탬프의 파일이 나중에 들어와도 적용한다.
+      - name: Migrate production database
+        id: migrate
+        if: steps.guard.outputs.ready == 'true' && steps.guard.outputs.migrations != '0'
+        run: npx supabase db push --db-url "$SUPABASE_DB_URL" --include-all
+
+      - name: Deploy Edge Functions
+        id: functions
+        if: steps.guard.outputs.ready == 'true' && steps.guard.outputs.functions != '0'
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ] || [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "::error::Edge Function 배포에는 SUPABASE_ACCESS_TOKEN 시크릿과 SUPABASE_PROJECT_REF 변수가 필요합니다."
+            exit 1
+          fi
+          npx supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Result
+        id: result
+        if: always()
+        env:
+          READY: ${{ steps.guard.outputs.ready }}
+          MIGRATE: ${{ steps.migrate.outcome }}
+          FUNCTIONS: ${{ steps.functions.outcome }}
+        run: |
+          if [ "$READY" != true ]; then echo "value=skipped" >> "$GITHUB_OUTPUT"
+          elif [ "$MIGRATE" = failure ] || [ "$FUNCTIONS" = failure ]; then echo "value=failure" >> "$GITHUB_OUTPUT"
+          else echo "value=success" >> "$GITHUB_OUTPUT"; fi
+
+  app:
+    needs: [database]
+    if: ${{ !cancelled() && needs.database.result == 'success' && !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      result: ${{ steps.result.outputs.value }}
+      report: ${{ steps.result.outputs.report }}
+      modes: ${{ steps.staging.outputs.modes }}
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
+      COMMIT_TITLE: ${{ github.event.head_commit.message }}
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check configuration
+        id: guard
+        run: |
+          if [ -z "$EXPO_TOKEN" ] || ! node -e 'process.exit(require("./app.json").expo?.extra?.eas?.projectId ? 0 : 1)'; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### ⏭️ 앱 배포 건너뜀 — EXPO_TOKEN 시크릿 또는 app.json 의 EAS projectId 가 없습니다(프로비저닝 전)." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        if: steps.guard.outputs.ready == 'true'
+        run: npm ci
+
+      - uses: expo/expo-github-action@v9
+        if: steps.guard.outputs.ready == 'true'
+        with:
+          eas-version: ${{ vars.EAS_CLI_VERSION || 'latest' }}
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # EAS_PLATFORMS: 처음에는 android 만(계정 없이 APK 로 확인 가능). Apple 개발자 계정을 연결하면 all.
+      - name: Staging (OTA or new build)
+        id: staging
+        run: node scripts/release.mjs staging --platforms "${{ vars.EAS_PLATFORMS || 'android' }}" --report report.md
+        if: steps.guard.outputs.ready == 'true'
+
+      - name: Result
+        id: result
+        if: always()
+        env:
+          READY: ${{ steps.guard.outputs.ready }}
+          OUTCOME: ${{ steps.staging.outcome }}
+        run: |
+          if [ "$READY" != true ]; then echo "value=skipped" >> "$GITHUB_OUTPUT"
+          elif [ "$OUTCOME" = success ]; then echo "value=success" >> "$GITHUB_OUTPUT"
+          else echo "value=failure" >> "$GITHUB_OUTPUT"; fi
+          [ -s report.md ] && echo "report=$(base64 -w0 report.md)" >> "$GITHUB_OUTPUT" || true
+
+  report:
+    needs: [database, app]
+    if: ${{ always() && !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Comment on the merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DB: ${{ needs.database.outputs.result || needs.database.result }}
+          APP: ${{ needs.app.outputs.result || needs.app.result }}
+          MODES: ${{ needs.app.outputs.modes }}
+          REPORT: ${{ needs.app.outputs.report }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].number // empty' || true)
+          if [ "$DB" = failure ] || [ "$APP" = failure ]; then
+            head="❌ 스테이징 배포 실패 — DB: $DB · 앱: $APP. 실행 로그를 확인하세요(DB 마이그레이션이 실패했으면 앱은 배포하지 않았습니다)."
+          elif [ "$APP" = success ] && [[ "$MODES" == *build* ]]; then
+            head="🧱 스테이징 빌드를 새로 만듭니다(네이티브 변경). 빌드가 끝나면 폰에 새로 설치해 확인하세요."
+          elif [ "$APP" = success ]; then
+            head="📦 스테이징에 OTA 로 배포했습니다. 스테이징 앱을 껐다 켜면 받습니다."
+          else
+            head="⏭️ 스테이징 배포를 건너뛰었습니다(설정 없음) — DB: $DB · 앱: $APP"
+          fi
+          details=""
+          [ -n "$REPORT" ] && details=$(printf '%s' "$REPORT" | base64 -d)
+          body=$(printf '%s\n\n%s\n\n출시하려면 세션에서 "출시해줘" 라고 요청하세요. · [실행 로그](%s)' "$head" "$details" "$RUN_URL")
+          echo "$body" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$pr" ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$pr/comments" -f body="$body" >/dev/null
+          fi
+          [ "$DB" != failure ] && [ "$APP" != failure ]

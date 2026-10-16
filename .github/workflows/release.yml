@@ -1,0 +1,108 @@
+name: Release
+
+# 사용자에게 내보내는 출시. 사람이 요청했을 때만 실행한다(세션: node scripts/gh.mjs dispatch release.yml kind=ota).
+#
+#   kind=ota      스테이징에서 확인한 최신 OTA 업데이트를 production 채널로 (rollout %, 기본 10).
+#                 rollout-monitor.yml 이 오류율을 보며 10 → 50 → 100% 로 올리거나 멈춘다.
+#                 프로덕션 빌드의 runtimeVersion 이 다르면(네이티브 변경) 실패하고 kind=store 를 안내한다.
+#   kind=store    main 으로 프로덕션 빌드 → 스토어 제출(Play 프로덕션 트랙 10% / App Store Connect 업로드).
+#                 iOS 심사 제출 버튼은 사람이 App Store Connect 에서 누른다.
+#                 스테이징에서 확인하지 않은 커밋이 main 에 있으면 멈춘다(force=true 로 무시).
+#   kind=rollout  진행 중인 production OTA 롤아웃 비율을 percent 로 바꾼다.
+on:
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: "ota | store | rollout"
+        required: true
+        type: choice
+        options: [ota, store, rollout]
+      platforms:
+        description: "android | ios | all (비우면 EAS_PLATFORMS 변수)"
+        required: false
+        default: ""
+      rollout:
+        description: "kind=ota: 처음 내보낼 비율(%)"
+        required: false
+        default: "10"
+      percent:
+        description: "kind=rollout: 바꿀 비율(%)"
+        required: false
+        default: "100"
+      force:
+        description: "kind=store: 스테이징 확인 전 커밋이 있어도 진행"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  release:
+    if: ${{ !github.event.repository.is_template }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
+      KIND: ${{ inputs.kind }}
+      PLATFORMS: ${{ inputs.platforms || vars.EAS_PLATFORMS || 'android' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check configuration
+        run: |
+          if [ -z "$EXPO_TOKEN" ] || ! node -e 'process.exit(require("./app.json").expo?.extra?.eas?.projectId ? 0 : 1)'; then
+            echo "::error::EXPO_TOKEN 시크릿 또는 app.json 의 EAS projectId 가 없습니다. docs/bootstrap/SETUP.md 를 확인하세요."
+            exit 1
+          fi
+
+      # 스토어 출시는 스테이징에서 사람이 확인한 코드여야 한다. 마지막 스테이징 배포 커밋과 main 이 같은지 본다.
+      - name: Staging was verified
+        if: inputs.kind == 'store' && !inputs.force
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty')
+          if [ "$last" != "$GITHUB_SHA" ]; then
+            echo "::error::main(${GITHUB_SHA::7}) 이 마지막 스테이징 배포(${last:0:7})와 다릅니다. 스테이징 배포가 끝나고 폰에서 확인한 뒤 다시 실행하세요(무시하려면 force=true)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - uses: expo/expo-github-action@v9
+        with:
+          eas-version: ${{ vars.EAS_CLI_VERSION || 'latest' }}
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Release
+        env:
+          ROLLOUT: ${{ inputs.rollout }}
+          PERCENT: ${{ inputs.percent }}
+        run: |
+          case "$KIND" in
+            ota) node scripts/release.mjs ota --platforms "$PLATFORMS" --rollout "$ROLLOUT" ;;
+            store) node scripts/release.mjs store --platforms "$PLATFORMS" ;;
+            rollout) node scripts/release.mjs rollout --platforms "$PLATFORMS" --percent "$PERCENT" ;;
+          esac
