@@ -1,0 +1,50 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# 네이티브 폴더는 CNG(prebuild)로 생성한다. 커밋하지 않는다.
+/ios
+/android
+.kotlin/
+
+# 서명·키 파일은 절대 커밋하지 않는다(EAS 가 보관한다).
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+google-services*.json
+GoogleService-Info.plist
+*service-account*.json
+
+# Metro
+.metro-health-check*
+
+# 테스트 결과
+/coverage
+/test-results
+/playwright-report
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+
+# env files
+.env*
+
+# typescript
+*.tsbuildinfo
+
+# CI 작업 디렉터리
+.review/
+/pr/
+.refine/
