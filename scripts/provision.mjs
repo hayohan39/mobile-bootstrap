@@ -15,7 +15,7 @@
 //   SUPABASE_ORG_ID        Supabase 조직 slug (Organization → Settings 의 Organization slug)
 //
 // 다시 실행해도 안전하다(같은 이름의 프로젝트가 있으면 재사용한다). 단 DB 비밀번호는 만들 때만 알 수 있으므로
-// 재사용한 프로젝트에 SUPABASE_DB_URL 이 없으면 사용자가 대시보드에서 넣어야 한다(요약에 안내).
+// 재사용한 프로젝트이고 리포지토리에 SUPABASE_DB_URL 도 없으면 사용자가 대시보드에서 넣어야 한다(요약에 안내).
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
@@ -144,6 +144,14 @@ const setSecret = (repo, key, value) => {
   gh(['secret', 'set', key, '-R', repo], value);
   console.log(`  secret ${key} → ${repo}`);
 };
+const hasSecret = (repo, key) => {
+  try {
+    execFileSync('gh', ['api', `repos/${repo}/actions/secrets/${key}`], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
 const setVariable = (repo, key, value) => {
   gh(['variable', 'set', key, '-R', repo, '--body', value]);
   console.log(`  variable ${key}=${value}`);
@@ -240,7 +248,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       setVariable(repo, 'SUPABASE_PROJECT_REF', db.ref);
       setVariable(repo, 'EAS_PLATFORMS', 'android');
       if (db.dbUrl) setSecret(repo, 'SUPABASE_DB_URL', db.dbUrl);
-      output({ supabase_url: db.url, publishable_key: db.publishableKey, ref: db.ref, db_url_set: Boolean(db.dbUrl) });
+      // 재실행으로 프로젝트를 재사용하면 비밀번호를 모르지만, 첫 실행이 넣어 둔 시크릿이 있으면 그걸로 충분하다.
+      const dbUrlSet = Boolean(db.dbUrl) || hasSecret(repo, 'SUPABASE_DB_URL');
+      output({ supabase_url: db.url, publishable_key: db.publishableKey, ref: db.ref, db_url_set: dbUrlSet });
       console.log('\n✅ Supabase 프로비저닝 완료');
     }
   } catch (error) {
