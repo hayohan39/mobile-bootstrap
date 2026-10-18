@@ -144,11 +144,16 @@ const setSecret = (repo, key, value) => {
   gh(['secret', 'set', key, '-R', repo], value);
   console.log(`  secret ${key} → ${repo}`);
 };
+// 404 만 "시크릿 없음". 권한·네트워크 같은 다른 실패도 false 지만 ::warning:: 으로 이유를 남긴다.
 const hasSecret = (repo, key) => {
   try {
-    execFileSync('gh', ['api', `repos/${repo}/actions/secrets/${key}`], { stdio: 'ignore' });
+    execFileSync('gh', ['api', `repos/${repo}/actions/secrets/${key}`], { stdio: 'pipe' });
     return true;
-  } catch {
+  } catch (error) {
+    const reason = `${error.stderr ?? ''}${error.stdout ?? ''}`.trim() || error.message;
+    if (!/HTTP 404|Not Found/i.test(reason)) {
+      console.log(`::warning::시크릿 ${key} 확인 실패(없는 것으로 처리): ${reason.split('\n')[0]}`);
+    }
     return false;
   }
 };
