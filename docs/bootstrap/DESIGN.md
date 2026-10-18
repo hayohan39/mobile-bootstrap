@@ -75,3 +75,30 @@ vitest 는 `.mjs` 스크립트(Risk·출시·프로비저닝)와 DB 테스트를
 
 `EAS_PLATFORMS` 기본값은 `android`. Android 스테이징 빌드는 계정 없이 APK 링크로 폰에 설치된다. iOS 는 Apple Developer 계정
 (서명)이 있어야 기기에 설치된다(TestFlight). 계정을 연결하면 변수를 `all` 로 바꾸기만 하면 된다.
+
+## 10. Actions 안의 Claude 와 토큰 — 누가 무엇으로 push 하나
+
+GitHub 는 **`GITHUB_TOKEN` 으로 한 push 로는 워크플로를 다시 실행하지 않는다**(무한 루프 방지). 그래서 auto-fix·품질 리뷰·`@claude` 가
+고친 커밋이 CI 를 다시 받으려면 다른 토큰으로 push 해야 한다.
+
+| 토큰 | 어디서 | 쓰임 |
+| --- | --- | --- |
+| `GITHUB_TOKEN` | 워크플로마다 자동 | 체크아웃, PR 코멘트·라벨, action 이 시작하기 전의 git 명령 |
+| Claude App 토큰 | `claude-code-action` 이 OIDC 로 받음(Claude GitHub App 설치 필요) | Claude 의 `git push` → CI 다시 실행 |
+| `BOT_PAT`(선택) | 시크릿 | App 대신 쓰는 토큰. 있으면 위 두 자리를 모두 대신한다 |
+
+ci.yml(refine·autofix)과 claude-mention.yml 의 순서:
+
+1. `actions/checkout` 은 `persist-credentials: false` — v7 은 토큰을 includeIf 로 따로 저장하는데 action 이 그걸 지우지 못한다.
+2. 다음 스텝이 토큰을 `.git/config` 의 `http.https://github.com/.extraheader`(checkout v4 방식)로 넣는다.
+   action 앞의 git 명령(`@claude` 가 PR 브랜치를 fetch 하는 것 등)은 이 토큰을 쓴다.
+3. action 이 시작하며 이 헤더를 지우고("Removing existing git authentication headers") 원격 주소에 App 토큰을 넣는다 → push 는 App 토큰.
+4. action 은 끝날 때 App 토큰을 폐기한다. 그 뒤 스텝은 git 원격 대신 API(`gh`, `GITHUB_TOKEN`)를 쓴다.
+5. App 토큰으로 push 한 커밋의 CI·PR 리뷰는 `claude[bot]` 이 시작한 실행이다. action 은 bot 이 시작한 실행을 기본으로 거부하므로
+   ci.yml(refine·autofix)과 pr-review.yml 에 `allowed_bots: claude` 를 둔다(@claude 는 사람의 코멘트로만 시작하므로 두지 않는다).
+
+증상과 원인:
+- Claude 커밋(`[claude-refine]`·`[claude-autofix]`·`@claude`)에 체크가 하나도 안 붙는다 → push 가 `GITHUB_TOKEN` 으로 나갔다(2·3 이 깨짐).
+- `@claude` 가 `fatal: could not read Username` 으로 멈춘다 → 2 의 헤더가 없다.
+- Claude 커밋 뒤 품질 리뷰가 "결과를 남기지 못했습니다", PR 리뷰가 "AI 리뷰 없음" → `Workflow initiated by non-human actor` (5 가 빠짐).
+- `ci.yml` 을 바꾸는 PR 에서는 refine 이 건너뛴다 — action 이 기본 브랜치와 다른 워크플로에는 App 토큰을 주지 않기 때문(정상).
