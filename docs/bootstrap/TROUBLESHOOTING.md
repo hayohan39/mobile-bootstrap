@@ -47,6 +47,10 @@ CI 가 취소됐으면 다음 커밋에서 붙는다, Actions → PR review → 
 **품질 리뷰·auto-fix 가 안 돎** — `CLAUDE_CODE_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`, `no-refine`/`no-autofix` 라벨,
 `ci.yml` 을 바꾼 PR(main 과 달라서 App 토큰 검사에 걸림 — merge 후 다음 PR 부터).
 
+**Claude 커밋에 체크가 안 붙음 / `@claude` 가 `could not read Username` / 로그에 `Workflow initiated by non-human actor`** —
+Claude 가 어떤 토큰으로 push 하는지의 문제다. 증상별 원인은 [DESIGN.md 10번](DESIGN.md#10-actions-안의-claude-와-토큰--누가-무엇으로-push-하나).
+먼저 그 실행 로그에서 `Removing existing git authentication headers` 줄과 push 한 토큰 종류를 확인한다.
+
 ## 스테이징·출시
 
 **Deploy 의 `Migrate production database` 실패** — 로그의 SQL 오류. 실패한 파일은 트랜잭션이라 되돌려졌다. 고치는 마이그레이션을
