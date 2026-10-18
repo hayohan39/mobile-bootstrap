@@ -94,8 +94,11 @@ ci.yml(refine·autofix)과 claude-mention.yml 의 순서:
    action 앞의 git 명령(`@claude` 가 PR 브랜치를 fetch 하는 것 등)은 이 토큰을 쓴다.
 3. action 이 시작하며 이 헤더를 지우고("Removing existing git authentication headers") 원격 주소에 App 토큰을 넣는다 → push 는 App 토큰.
 4. action 은 끝날 때 App 토큰을 폐기한다. 그 뒤 스텝은 git 원격 대신 API(`gh`, `GITHUB_TOKEN`)를 쓴다.
+5. App 토큰으로 push 한 커밋의 CI·PR 리뷰는 `claude[bot]` 이 시작한 실행이다. action 은 bot 이 시작한 실행을 기본으로 거부하므로
+   ci.yml(refine·autofix)과 pr-review.yml 에 `allowed_bots: claude` 를 둔다(@claude 는 사람의 코멘트로만 시작하므로 두지 않는다).
 
 증상과 원인:
 - Claude 커밋(`[claude-refine]`·`[claude-autofix]`·`@claude`)에 체크가 하나도 안 붙는다 → push 가 `GITHUB_TOKEN` 으로 나갔다(2·3 이 깨짐).
 - `@claude` 가 `fatal: could not read Username` 으로 멈춘다 → 2 의 헤더가 없다.
+- Claude 커밋 뒤 품질 리뷰가 "결과를 남기지 못했습니다", PR 리뷰가 "AI 리뷰 없음" → `Workflow initiated by non-human actor` (5 가 빠짐).
 - `ci.yml` 을 바꾸는 PR 에서는 refine 이 건너뛴다 — action 이 기본 브랜치와 다른 워크플로에는 App 토큰을 주지 않기 때문(정상).
