@@ -49,6 +49,7 @@ CI 가 취소됐으면 다음 커밋에서 붙는다, Actions → PR review → 
 
 **Claude 커밋에 체크가 안 붙음 / `@claude` 가 `could not read Username` / 로그에 `Workflow initiated by non-human actor`** —
 Claude 가 어떤 토큰으로 push 하는지의 문제다. 증상별 원인은 [DESIGN.md 10번](DESIGN.md#10-actions-안의-claude-와-토큰--누가-무엇으로-push-하나).
+먼저 그 실행 로그에서 `Removing existing git authentication headers` 줄과 push 한 토큰 종류를 확인한다.
 
 ## 스테이징·출시
 
