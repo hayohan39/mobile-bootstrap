@@ -102,3 +102,22 @@ ci.yml(refine·autofix)과 claude-mention.yml 의 순서:
 - `@claude` 가 `fatal: could not read Username` 으로 멈춘다 → 2 의 헤더가 없다.
 - Claude 커밋 뒤 품질 리뷰가 "결과를 남기지 못했습니다", PR 리뷰가 "AI 리뷰 없음" → `Workflow initiated by non-human actor` (5 가 빠짐).
 - `ci.yml` 을 바꾸는 PR 에서는 refine 이 건너뛴다 — action 이 기본 브랜치와 다른 워크플로에는 App 토큰을 주지 않기 때문(정상).
+
+## 11. Actions 시간은 계정 전체가 나눠 쓴다
+
+GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다가 아니라 **계정의 모든 비공개 리포지토리 합계**다.
+이 템플릿으로 프로젝트를 여러 개 만들면 금방 넘고, 예산이 $0 이면 그 달은 모든 워크플로가 시작조차 하지 않는다
+(`The job was not started because ... spending limit`). 그래서 "필요할 때만 돈다" 를 워크플로에 박아 둔다:
+
+| 낭비 | 막는 방법 |
+| --- | --- |
+| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시). `e2e` 라벨이면 매번 |
+| 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·품질 리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정 → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀, deploy 는 배포 안 함 |
+| draft PR 의 전체 검사 | lint·typecheck 만. Ready for review 이벤트로 전체가 돈다 |
+| merge 후 main 에서 같은 test 를 다시 | ci.yml 의 main push 트리거 없음(브랜치 보호로 PR 에서 이미 통과). 필요하면 수동 실행 |
+| 출시 전·롤아웃 100% 뒤에도 매일 도는 rollout-monitor(실행마다 npm ci + EAS CLI) | 할 일이 없으면 스스로 disable, release.yml(kind=ota·rollout)이 enable |
+| Claude job 이 멈추면 기본 한도 6시간 과금 | refine·autofix 30분, @claude 45분 timeout |
+
+`test` 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 체크이고, `scripts/risk/cli.mjs ci` 가 `test == success` 를 CI 통과
+조건으로 본다(skipped 면 AI 리뷰가 "CI 실패" 로 빠진다). 그래서 job 은 돌되 스텝을 건너뛴다(1분).
+EAS 클라우드 빌드는 원래 fingerprint 가 바뀔 때만 만들고 `--no-wait` 라 Actions 가 기다리지 않는다.

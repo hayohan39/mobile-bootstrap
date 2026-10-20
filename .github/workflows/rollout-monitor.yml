@@ -4,6 +4,8 @@ name: Rollout monitor
 #   - 좋으면 다음 단계로(10 → 50 → 100%),
 #   - 나쁘면 롤아웃을 취소하고 이슈를 연다(사람이 원인 확인 → 수정 PR → 다시 출시),
 #   - 데이터가 적거나 Sentry 가 없으면 그대로 둔다(세션에서 "롤아웃 50% 로 올려줘" 로 수동 진행).
+#   - 진행 중인 롤아웃이 없으면 이 워크플로를 스스로 끈다(Actions 시간 절약 — 출시 전·롤아웃 100% 뒤에 매일 돌지 않게).
+#     release.yml 이 OTA 를 내보내거나 비율을 바꾸면 다시 켠다. 수동으로 켜기: Actions → Rollout monitor → Enable workflow.
 # 기준: ROLLOUT_HALT_BELOW(0.99) · ROLLOUT_ADVANCE_ABOVE(0.995) · ROLLOUT_MIN_SESSIONS(30) 변수.
 on:
   schedule:
@@ -21,6 +23,7 @@ defaults:
 permissions:
   contents: read
   issues: write
+  actions: write # 할 일이 없으면 이 워크플로를 끈다
 
 env:
   EXPO_NO_TELEMETRY: "1"
@@ -79,3 +82,12 @@ jobs:
         run: |
           body=$(printf '%s\n\n오류율이 기준을 넘어 OTA 롤아웃을 자동으로 취소했습니다. 이미 받은 사용자도 다음 실행 때 이전 업데이트로 돌아갑니다.\n\n다음: Sentry 에서 원인 확인 → 수정 PR → 스테이징 확인 → 다시 출시. 절차는 `docs/runbook.md`.\n\n[실행 로그](%s)' "$(cat report.md)" "$RUN_URL")
           gh issue create --title "🛑 OTA 롤아웃 자동 중단 ($(date -u +%F))" --body "$body"
+
+      # 정기 실행에서 할 일이 없으면(진행 중인 롤아웃 없음 · 프로비저닝 전) 이 워크플로를 끈다.
+      - name: Pause when idle
+        if: github.event_name == 'schedule' && (steps.guard.outputs.ready != 'true' || steps.monitor.outputs.idle == 'true')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/rollout-monitor.yml/disable"
+          echo "⏸️ 진행 중인 롤아웃이 없어 매일 감시를 멈췄습니다. 다음 OTA 출시 때 release.yml 이 다시 켭니다." >> "$GITHUB_STEP_SUMMARY"

@@ -222,7 +222,7 @@ async function monitor(platforms, info, cfg) {
     const active = activeRollout(platform);
     const decision = nextRollout(active ? active.rolloutPercentage : null, health, cfg);
     if (decision.action === 'done') {
-      lines.push({ platform, mode: 'monitor', icon: '➖', text: '진행 중인 OTA 롤아웃 없음' });
+      lines.push({ platform, mode: 'monitor', icon: '➖', idle: true, text: '진행 중인 OTA 롤아웃 없음' });
     } else if (decision.action === 'advance') {
       eas(['update:edit', active.group, '--rollout-percentage', String(decision.to)]);
       lines.push({ platform, mode: 'monitor', icon: '📈', text: `롤아웃 ${active.rolloutPercentage}% → ${decision.to}% (${decision.reason})`, link: updateLink(info, active.group) });
@@ -235,6 +235,9 @@ async function monitor(platforms, info, cfg) {
   }
   return lines;
 }
+
+/** 모든 플랫폼에 진행 중인 롤아웃이 없나 — 그러면 rollout-monitor 가 매일 도는 것을 멈춘다(release 가 다시 켠다). */
+export const monitorIdle = (lines) => lines.length > 0 && lines.every((l) => l.idle);
 
 export function renderReport(title, lines) {
   const out = [`### ${title}`, ''];
@@ -291,7 +294,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     if (a.report) writeFileSync(a.report, report);
     if (process.env.GITHUB_OUTPUT) {
       const modes = [...new Set(lines.map((l) => l.mode))].join(',');
-      writeFileSync(process.env.GITHUB_OUTPUT, `modes=${modes}\nhalted=${lines.some((l) => l.halted)}\n`, { flag: 'a' });
+      writeFileSync(process.env.GITHUB_OUTPUT, `modes=${modes}\nhalted=${lines.some((l) => l.halted)}\nidle=${monitorIdle(lines)}\n`, { flag: 'a' });
     }
   } catch (error) {
     console.error(`::error::${error.message}`);

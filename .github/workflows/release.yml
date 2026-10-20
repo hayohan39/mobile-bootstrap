@@ -45,7 +45,7 @@ defaults:
 
 permissions:
   contents: read
-  actions: read
+  actions: write # 롤아웃 감시(rollout-monitor) 다시 켜기
 
 env:
   EXPO_NO_TELEMETRY: "1"
@@ -106,3 +106,10 @@ jobs:
             store) node scripts/release.mjs store --platforms "$PLATFORMS" ;;
             rollout) node scripts/release.mjs rollout --platforms "$PLATFORMS" --percent "$PERCENT" ;;
           esac
+
+      # rollout-monitor 는 할 일이 없으면 스스로 꺼진다. OTA 롤아웃이 시작·변경되면 다시 켠다.
+      - name: Resume rollout monitor
+        if: inputs.kind == 'ota' || inputs.kind == 'rollout'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/rollout-monitor.yml/enable"

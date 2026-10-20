@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildLink, hasLiveBuild, latestGroup, nextRollout, parsePlatforms, parseSentryHealth, renderReport } from "../scripts/release.mjs";
+import { buildLink, hasLiveBuild, latestGroup, monitorIdle, nextRollout, parsePlatforms, parseSentryHealth, renderReport } from "../scripts/release.mjs";
 
 describe("release", () => {
   it("플랫폼 목록", () => {
@@ -51,5 +51,13 @@ describe("release", () => {
     expect(renderReport("스테이징 배포", [{ platform: "android", icon: "📦", text: "OTA", link: "https://x" }])).toBe(
       "### 스테이징 배포\n\n- 📦 **android** OTA — [EAS](https://x)",
     );
+  });
+
+  it("모든 플랫폼에 진행 중인 롤아웃이 없을 때만 감시를 멈춘다", () => {
+    const idle = { platform: "android", icon: "➖", idle: true, text: "없음" };
+    const holding = { platform: "ios", icon: "⏸️", text: "50% 유지" };
+    expect(monitorIdle([idle, { ...idle, platform: "ios" }])).toBe(true);
+    expect(monitorIdle([idle, holding])).toBe(false);
+    expect(monitorIdle([])).toBe(false);
   });
 });

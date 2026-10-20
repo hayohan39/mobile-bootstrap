@@ -27,6 +27,7 @@ jobs:
       (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || github.event.label.name == 'claude'))
     runs-on: ubuntu-latest
+    timeout-minutes: 45 # Claude 가 멈춰도 6시간 과금되지 않게(--max-turns 60)
     permissions:
       contents: write
       pull-requests: write

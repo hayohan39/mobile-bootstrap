@@ -9,6 +9,7 @@ name: Deploy (staging)
 #   report    merge 된 PR 에 결과 코멘트 (📦 OTA · 🧱 새 빌드 · ❌ 실패 · ⏭️ 건너뜀)
 #
 # 설정이 없으면(프로비저닝 전, 템플릿 리포지토리) 실패가 아니라 건너뛴다 — main 이 빨갛게 되지 않게.
+# 문서만 바뀐 merge(scripts/ci-changes.mjs)는 배포하지 않는다 — 같은 앱을 OTA 로 다시 올리는 데 Actions 시간을 쓰지 않게.
 on:
   push:
     branches: [main]
@@ -36,16 +37,34 @@ jobs:
     environment: production
     outputs:
       result: ${{ steps.result.outputs.value }}
+      code: ${{ steps.changes.outputs.code || 'true' }}
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # 수동 실행(workflow_dispatch)은 항상 배포한다.
+      - name: Changed files
+        id: changes
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: node scripts/ci-changes.mjs --base "$BEFORE" --head "$GITHUB_SHA"
 
       - name: Check configuration
         id: guard
+        env:
+          CODE: ${{ steps.changes.outputs.code || 'true' }}
         run: |
+          if [ "$CODE" != true ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "### 📝 문서만 바뀜 — 스테이징 배포를 건너뜁니다" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           migrations=$(ls supabase/migrations/*.sql 2>/dev/null | wc -l | tr -d ' ')
           functions=$(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts -not -path '*/_*' 2>/dev/null | wc -l | tr -d ' ')
           echo "migrations=$migrations" >> "$GITHUB_OUTPUT"
@@ -104,7 +123,7 @@ jobs:
 
   app:
     needs: [database]
-    if: ${{ !cancelled() && needs.database.result == 'success' && !github.event.repository.is_template }}
+    if: ${{ !cancelled() && needs.database.result == 'success' && needs.database.outputs.code != 'false' && !github.event.repository.is_template }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -167,7 +186,7 @@ jobs:
 
   report:
     needs: [database, app]
-    if: ${{ always() && !github.event.repository.is_template }}
+    if: ${{ always() && needs.database.outputs.code != 'false' && !github.event.repository.is_template }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

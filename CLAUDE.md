@@ -114,21 +114,29 @@ PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네
 PR 생성/push ─► ci.yml
                  ├ test     마이그레이션 append-only · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor
                  ├ preview  fingerprint 비교(네이티브 변경?) · EAS Update(branch pr-<n>) · 웹 프리뷰 → PR 코멘트
-                 ├ e2e      (네이티브 변경 또는 `e2e` 라벨) Android 빌드 → 에뮬레이터 Maestro
+                 ├ e2e      (네이티브 변경 또는 `e2e` 라벨) Android 빌드 → 에뮬레이터 Maestro — 같은 PR·같은 네이티브 상태로 통과했으면 다시 안 돎
                  ├ refine   통과하면 Claude 품질 리뷰 → 작은 정리는 [claude-refine] 커밋 (push 당 1회)
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
+                 (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀 · draft PR: lint·typecheck 만)
              ─► risk-gate.yml  새 커밋이면 risk-gate 를 "대기" 로
 CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 · risk-gate
 PR 코멘트 @claude ─► claude-mention.yml  지시대로 수정
 merge ─► deploy.yml (= 스테이징)  DB 마이그레이션(프로덕션 Supabase) → Edge Functions →
                                   fingerprint 같은 스테이징 빌드가 있으면 OTA(staging) / 없으면 스테이징 빌드(내부 배포)
+                                  (문서만 바뀐 merge 는 배포하지 않음. main push 에서 CI 는 다시 돌지 않음)
 요청 ─► release.yml  kind=ota: 스테이징 업데이트를 production 채널로 (rollout %) / kind=store: 프로덕션 빌드 → 스토어 제출
 매일 ─► rollout-monitor.yml  Sentry 오류율로 OTA 롤아웃을 올리거나 멈추고 이슈로 알림
+                              (진행 중인 롤아웃이 없으면 스스로 꺼짐 → release.yml 이 OTA 를 낼 때 다시 켬)
 수동 ─► rollback.yml  production OTA 를 직전 업데이트로 되돌리기
 PR 닫힘 ─► preview-cleanup.yml  EAS Update 의 pr-<n> 브랜치 정리
 ```
 
 - 워크플로를 고칠 때는 그 이유를 PR 에 적는다. 시크릿 값을 로그에 찍지 않는다.
+- **Actions 시간은 계정의 모든 비공개 리포지토리가 나눠 쓴다**(GitHub Free 월 2,000분 · Pro 3,000분, 넘으면 예산만큼 과금 —
+  예산이 $0 이면 그 달은 모든 워크플로가 멈춘다). JS push 한 번에 약 10분, 네이티브 PR 의 e2e 는 20~60분이다.
+  그래서: `npm run check` 를 통과한 뒤 커밋을 모아 한 번에 push 한다(작은 수정마다 push 하지 않는다).
+  아직 리뷰받을 상태가 아니면 draft PR(`pr-create --draft`)로 연다. 위의 건너뛰기 규칙을 깨는 변경(새 워크플로, 새 schedule, 매 push 마다 도는 job)은
+  PR 본문에 예상 사용 시간을 쓴다. 품질 리뷰(refine) 커밋도 CI 를 한 번 더 돌린다 — 바쁜 달에는 변수 `CLAUDE_REFINE=false` 로 끌 수 있다.
 - 스테이징 앱과 프로덕션 앱은 **같은 Supabase DB** 를 쓴다. 그래서 DB 변경은 merge 순간 프로덕션 사용자에게도 적용된다
   — 아래 expand → contract 규칙이 이를 안전하게 한다.
 
