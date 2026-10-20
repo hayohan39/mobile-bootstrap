@@ -45,6 +45,7 @@
       "babel.config.js",
       "scripts/release.mjs",
       "scripts/fingerprint.mjs",
+      "scripts/ci-changes.mjs",
       "scripts/db.mjs",
       "scripts/session-start.sh"
     ],

@@ -56,6 +56,8 @@ describe("경로 분류", () => {
   });
   it("범주", () => {
     expect([...categorize(".github/workflows/ci.yml", config)]).toEqual(["infra"]);
+    // 검사·배포를 건너뛸지 정하는 스크립트 — 고치면 CI·배포를 바꾸는 것과 같다.
+    expect([...categorize("scripts/ci-changes.mjs", config)]).toEqual(["infra"]);
     expect(categorize(".github/workflows/pr-review.yml", config).has("riskSystem")).toBe(true);
     expect(categorize("supabase/functions/delete-account/index.ts", config).has("api")).toBe(true);
     expect(categorize("src/lib/supabase.ts", config).has("sharedCore")).toBe(true);
