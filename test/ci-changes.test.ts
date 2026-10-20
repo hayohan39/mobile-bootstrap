@@ -1,6 +1,10 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { codeChanged, isDocs } from "../scripts/ci-changes.mjs";
+import { changedFiles, codeChanged, isDocs } from "../scripts/ci-changes.mjs";
 
 describe("ci-changes", () => {
   it("문서만 바뀌면 앱 코드 변경이 아니다", () => {
@@ -21,5 +25,23 @@ describe("ci-changes", () => {
     expect(isDocs("src/features/game/notes.md")).toBe(false);
     expect(isDocs("assets/credits.md")).toBe(false);
     expect(isDocs("supabase/functions/README.md")).toBe(true);
+  });
+
+  it("assets/ 의 파일을 docs/ 로 옮기면 옛 경로도 바뀐 파일로 잡는다", () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), "ci-changes-"));
+    const git = (...args: string[]) => execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd: dir, stdio: "pipe" });
+    git("init", "-q");
+    mkdirSync(path.join(dir, "assets"));
+    writeFileSync(path.join(dir, "assets", "credits.md"), "# credits\n");
+    git("add", "-A");
+    git("commit", "-qm", "base");
+    const base = String(execFileSync("git", ["rev-parse", "HEAD"], { cwd: dir })).trim();
+    mkdirSync(path.join(dir, "docs"));
+    git("mv", "assets/credits.md", "docs/credits.md");
+    git("commit", "-qm", "move");
+
+    const files = changedFiles(base, "HEAD", dir);
+    expect(files).toEqual(expect.arrayContaining(["assets/credits.md", "docs/credits.md"]));
+    expect(codeChanged(files)).toBe(true);
   });
 });

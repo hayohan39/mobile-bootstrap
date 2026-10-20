@@ -23,7 +23,6 @@ defaults:
 permissions:
   contents: read
   issues: write
-  actions: write # 할 일이 없으면 이 워크플로를 끈다
 
 env:
   EXPO_NO_TELEMETRY: "1"
@@ -33,6 +32,8 @@ jobs:
     if: ${{ !github.event.repository.is_template }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      idle: ${{ steps.guard.outputs.ready != 'true' || steps.monitor.outputs.idle == 'true' }}
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -83,9 +84,17 @@ jobs:
           body=$(printf '%s\n\n오류율이 기준을 넘어 OTA 롤아웃을 자동으로 취소했습니다. 이미 받은 사용자도 다음 실행 때 이전 업데이트로 돌아갑니다.\n\n다음: Sentry 에서 원인 확인 → 수정 PR → 스테이징 확인 → 다시 출시. 절차는 `docs/runbook.md`.\n\n[실행 로그](%s)' "$(cat report.md)" "$RUN_URL")
           gh issue create --title "🛑 OTA 롤아웃 자동 중단 ($(date -u +%F))" --body "$body"
 
-      # 정기 실행에서 할 일이 없으면(진행 중인 롤아웃 없음 · 프로비저닝 전) 이 워크플로를 끈다.
+  # 정기 실행에서 할 일이 없으면(진행 중인 롤아웃 없음 · 프로비저닝 전) 이 워크플로를 끈다.
+  # actions: write 는 이 job 에만 준다(npm ci·EAS 를 돌리는 monitor job 의 토큰에는 주지 않는다).
+  pause:
+    needs: [monitor]
+    if: github.event_name == 'schedule' && needs.monitor.outputs.idle == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
       - name: Pause when idle
-        if: github.event_name == 'schedule' && (steps.guard.outputs.ready != 'true' || steps.monitor.outputs.idle == 'true')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -22,8 +22,9 @@ export function codeChanged(files) {
   return files.some((f) => !isDocs(f));
 }
 
-function changedFiles(base, head) {
-  const out = execFileSync('git', ['diff', '--name-only', `${base}...${head}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+/** base...head 에서 바뀐 경로. 이름 바꾸기는 옛 경로와 새 경로를 둘 다 낸다(assets/ → docs/ 로 옮긴 파일을 문서로 보지 않게). */
+export function changedFiles(base, head = 'HEAD', cwd = process.cwd()) {
+  const out = execFileSync('git', ['diff', '--name-only', '--no-renames', `${base}...${head}`], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   return out.split('\n').filter(Boolean);
 }
 
