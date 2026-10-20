@@ -113,11 +113,14 @@ GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다�
 | --- | --- |
 | 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시). `e2e` 라벨이면 매번 |
 | 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·품질 리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정(이름 바꾸기는 옛 경로까지) → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀. deploy 는 **마지막 성공 배포** 이후가 문서뿐일 때만 건너뜀 — 앞선 배포가 실패·취소됐으면 그 코드까지 배포한다 |
-| draft PR 의 전체 검사 | lint·typecheck 만. Ready for review 이벤트로 전체가 돈다 |
 | merge 후 main 에서 같은 test 를 다시 | ci.yml 의 main push 트리거 없음(브랜치 보호로 PR 에서 이미 통과). 필요하면 수동 실행 |
 | 출시 전·롤아웃 100% 뒤에도 매일 도는 rollout-monitor(실행마다 npm ci + EAS CLI) | 할 일이 없으면 스스로 disable, release.yml(kind=ota·rollout)이 enable. `actions: write` 는 그 한 줄짜리 job 에만(EXPO_TOKEN 을 쓰는 job 에는 주지 않는다) |
 | Claude job 이 멈추면 기본 한도 6시간 과금 | refine·autofix 30분, @claude 45분 timeout |
 
 `test` 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 체크이고, `scripts/risk/cli.mjs ci` 가 `test == success` 를 CI 통과
 조건으로 본다(skipped 면 AI 리뷰가 "CI 실패" 로 빠진다). 그래서 job 은 돌되 스텝을 건너뛴다(1분).
+draft PR 은 가볍게 돌리지 않는다 — `risk-gate.yml` 이 `ready_for_review` 에 반응하지 않아서, draft 기준(fingerprint·e2e 없이)
+매긴 risk-gate 가 Ready for review 뒤에도 남아 그 사이에 merge 될 수 있다.
+e2e 를 건너뛰는 것은 의도한 절충이다: 네이티브 상태가 같으면 뒤의 JS 변경은 다른 JS PR 처럼 jest·웹 스모크로만 본다
+(새 네이티브 모듈을 잘못 부르는 JS 는 못 잡을 수 있다). 마지막 커밋으로 다시 보려면 `e2e` 라벨.
 EAS 클라우드 빌드는 원래 fingerprint 가 바뀔 때만 만들고 `--no-wait` 라 Actions 가 기다리지 않는다.

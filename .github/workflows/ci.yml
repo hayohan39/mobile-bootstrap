@@ -17,7 +17,6 @@ name: CI
 # Actions 시간 아끼기(무료 사용량은 계정의 모든 비공개 리포지토리가 나눠 쓴다):
 #   - 문서만 바뀐 PR(scripts/ci-changes.mjs): test 는 성공으로 바로 끝나고 나머지는 건너뛴다.
 #     test 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 검사이고, Risk 리뷰가 test 성공을 CI 통과로 본다.
-#   - draft PR: lint·typecheck 만. Ready for review 로 바꾸면 전체 검사가 돈다.
 #   - e2e 는 같은 PR 에서 같은 네이티브 상태로 한 번 통과하면 다시 빌드하지 않는다(e2e 라벨이면 매번).
 #   - main push 에서는 돌지 않는다 — 브랜치 보호로 PR 의 test 를 이미 통과했다(스테이징 배포는 deploy.yml).
 #     main 을 다시 검사하려면 Actions → CI → Run workflow.
@@ -60,24 +59,18 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: node scripts/ci-changes.mjs --base "$BASE"
 
-      # code=false(문서만) → 아무 검사도 하지 않는다. full=false(draft) → lint·typecheck 만.
+      # code=false(문서만) → 아무 검사도 하지 않는다.
+      # draft 는 가볍게 돌리지 않는다: risk-gate 가 ready_for_review 에 반응하지 않아, draft 기준의 평가가 남은 채 merge 될 수 있다.
       - name: Scope
         id: scope
         env:
           CODE: ${{ steps.changes.outputs.code || 'true' }}
-          DRAFT: ${{ github.event.pull_request.draft || false }}
         run: |
           if [ "$CODE" != true ]; then
-            full=false
             echo "### 📝 문서만 바뀜 — 앱 검사·프리뷰·e2e·품질 리뷰를 건너뜁니다" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "$DRAFT" = true ]; then
-            full=false
-            echo "### ✏️ draft PR — lint·typecheck 만 합니다. Ready for review 로 바꾸면 전체 검사가 돕니다" >> "$GITHUB_STEP_SUMMARY"
-          else
-            full=true
           fi
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          echo "full=$full" >> "$GITHUB_OUTPUT"
+          echo "full=$CODE" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v7
         if: steps.scope.outputs.code == 'true'
@@ -155,11 +148,11 @@ jobs:
   # ---------------------------------------------------------------------------
   # 네이티브 변경 판정. base(merge-base) 를 별도 작업 트리에 받아 npm ci 하고, 두 쪽의 플랫폼별
   # runtimeVersion(fingerprint)을 비교한다. 다르면 이 PR 은 OTA 로 나갈 수 없다(새 빌드·스토어 심사).
-  # 결과는 프리뷰·e2e·Risk Score 가 쓴다. draft·문서만 바뀐 PR 에서는 하지 않는다(test 와 같은 판정).
+  # 결과는 프리뷰·e2e·Risk Score 가 쓴다. 문서만 바뀐 PR 에서는 하지 않는다(test 와 같은 판정).
   # ---------------------------------------------------------------------------
   fingerprint:
     name: fingerprint
-    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
@@ -225,6 +218,10 @@ jobs:
               echo "### 🧱 네이티브 변경 — 새 빌드 필요 (OTA 불가)"
               echo ""
               echo "바뀐 요소: \`${list:-알 수 없음}\`"
+              if [ "${{ steps.e2e.outputs.cache-hit }}" = "true" ]; then
+                echo ""
+                echo "e2e ⏭️ — 이 PR 의 이전 커밋에서 같은 네이티브 상태로 통과했습니다. 마지막 커밋으로 다시 돌리려면 \`e2e\` 라벨을 붙이고 push 하세요."
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### ⚡ 네이티브 변경 없음 — OTA 로 배포 가능" >> "$GITHUB_STEP_SUMMARY"
@@ -368,7 +365,7 @@ jobs:
   # (라벨 이벤트로는 CI 를 다시 돌리지 않는다 — 라벨 변경이 진행 중인 CI 를 취소하지 않게).
   # EAS 를 쓰지 않고 러너에서 직접 빌드한다(EAS 무료 빌드 한도 보존). 빌드+에뮬레이터는 한 번에 20~60분이라,
   # 같은 PR 에서 같은 네이티브 상태로 이미 통과했으면 다시 돌리지 않는다 — 그 뒤의 JS 변경은 다른 JS PR 처럼
-  # jest·웹 스모크로 검증된다. `e2e` 라벨이 있으면 매번 돈다. draft 에서는 돌지 않는다.
+  # jest·웹 스모크로 검증된다. `e2e` 라벨이 있으면 매번 돈다.
   # ---------------------------------------------------------------------------
   e2e:
     name: e2e
