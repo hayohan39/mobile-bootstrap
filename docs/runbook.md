@@ -39,6 +39,8 @@ PR merge ──► 스테이징 (deploy.yml, 자동)          ──► 사람�
      - 프로덕션 빌드와 runtimeVersion 이 다르면 워크플로가 실패하며 `kind=store` 를 안내한다.
      - 이후 `rollout-monitor.yml` 이 매일 오류율을 보고 50% → 100% 로 올린다. Sentry 가 없으면 사람이
        "롤아웃 100% 로 올려줘" → `dispatch release.yml kind=rollout percent=100`.
+     - 감시는 진행 중인 롤아웃이 없으면 스스로 꺼지고(Actions 시간 절약) 이 release 실행이 다시 켠다. EAS 콘솔에서
+       직접 롤아웃을 시작했다면 Actions → Rollout monitor → Enable workflow 로 켠다.
    - **네이티브 변경** → 버전 올리기 PR(`app.json` 의 `version`, 예: 1.2.0 → 1.3.0)을 먼저 merge 해서 스테이징에서 확인한 뒤
      `node scripts/gh.mjs dispatch release.yml kind=store`
      - Android: Play 프로덕션 트랙에 10% 단계적 출시로 제출. 비율은 Play Console → 프로덕션 → 출시 관리.

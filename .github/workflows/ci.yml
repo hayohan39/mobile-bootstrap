@@ -14,13 +14,16 @@ name: CI
 # PR 종합 코멘트와 risk-gate 상태를 갱신한다. 리뷰/게이트를 이 파일에 두지 않는 이유:
 # 이 파일은 PR 의 버전이 실행되므로, PR 이 자기 평가 방식을 바꿀 수 있게 된다.
 #
-# main push 에서는 test 만 돈다(스테이징 배포는 deploy.yml).
+# Actions 시간 아끼기(무료 사용량은 계정의 모든 비공개 리포지토리가 나눠 쓴다):
+#   - 문서만 바뀐 PR(scripts/ci-changes.mjs): test 는 성공으로 바로 끝나고 나머지는 건너뛴다.
+#     test 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 검사이고, Risk 리뷰가 test 성공을 CI 통과로 본다.
+#   - e2e 는 같은 PR 에서 같은 네이티브 상태로 한 번 통과하면 다시 빌드하지 않는다(e2e 라벨이면 매번).
+#   - main push 에서는 돌지 않는다 — 브랜치 보호로 PR 의 test 를 이미 통과했다(스테이징 배포는 deploy.yml).
+#     main 을 다시 검사하려면 Actions → CI → Run workflow.
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -42,12 +45,35 @@ jobs:
     name: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      full: ${{ steps.scope.outputs.full }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Changed files
+        id: changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/ci-changes.mjs --base "$BASE"
+
+      # code=false(문서만) → 아무 검사도 하지 않는다.
+      # draft 는 가볍게 돌리지 않는다: risk-gate 가 ready_for_review 에 반응하지 않아, draft 기준의 평가가 남은 채 merge 될 수 있다.
+      - name: Scope
+        id: scope
+        env:
+          CODE: ${{ steps.changes.outputs.code || 'true' }}
+        run: |
+          if [ "$CODE" != true ]; then
+            echo "### 📝 문서만 바뀜 — 앱 검사·프리뷰·e2e·품질 리뷰를 건너뜁니다" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "full=$CODE" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@v7
+        if: steps.scope.outputs.code == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -66,38 +92,48 @@ jobs:
           fi
 
       - name: Install
+        if: steps.scope.outputs.code == 'true'
         run: npm ci
 
       - name: Lint
+        if: steps.scope.outputs.code == 'true'
         run: npm run lint
 
       - name: Typecheck
+        if: steps.scope.outputs.code == 'true'
         run: npm run typecheck
 
       # 진짜 Supabase Postgres(auth 스키마·역할 포함)를 띄운다. 마이그레이션은 vitest 가 적용한다.
       - name: Start local Supabase database
+        if: steps.scope.outputs.full == 'true'
         run: |
           npx supabase db start
           echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> "$GITHUB_ENV"
 
       - name: Test (vitest + jest)
+        if: steps.scope.outputs.full == 'true'
         run: npm test
 
       - name: Expo dependency versions
+        if: steps.scope.outputs.full == 'true'
         run: npx expo install --check
 
       # 네트워크 검사(React Native Directory 등)가 섞여 있어 경고로만 남긴다.
       - name: Expo doctor
+        if: steps.scope.outputs.full == 'true'
         continue-on-error: true
         run: npx expo-doctor
 
       - name: Web export
+        if: steps.scope.outputs.full == 'true'
         run: npm run build:web
 
       - name: Install Playwright Chromium
+        if: steps.scope.outputs.full == 'true'
         run: npx playwright install --with-deps chromium
 
       - name: Web smoke test
+        if: steps.scope.outputs.full == 'true'
         run: npm run e2e:web
 
       - uses: actions/upload-artifact@v7
@@ -112,7 +148,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # 네이티브 변경 판정. base(merge-base) 를 별도 작업 트리에 받아 npm ci 하고, 두 쪽의 플랫폼별
   # runtimeVersion(fingerprint)을 비교한다. 다르면 이 PR 은 OTA 로 나갈 수 없다(새 빌드·스토어 심사).
-  # 결과는 프리뷰·e2e·Risk Score 가 쓴다.
+  # 결과는 프리뷰·e2e·Risk Score 가 쓴다. 문서만 바뀐 PR 에서는 하지 않는다(test 와 같은 판정).
   # ---------------------------------------------------------------------------
   fingerprint:
     name: fingerprint
@@ -124,18 +160,27 @@ jobs:
       android: ${{ steps.compare.outputs.android }}
       ios: ${{ steps.compare.outputs.ios }}
       sources: ${{ steps.sources.outputs.list }}
+      e2e_passed: ${{ steps.e2e.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Changed files
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/ci-changes.mjs --base "$BASE"
+
       - uses: actions/setup-node@v7
+        if: steps.changes.outputs.code == 'true'
         with:
           node-version-file: .nvmrc
           cache: npm
 
       # 양쪽 모두 install 스크립트 없이 설치한다(같은 조건으로 비교, PR 의 스크립트를 실행하지 않음).
       - name: Install (head and base)
+        if: steps.changes.outputs.code == 'true'
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
@@ -146,12 +191,25 @@ jobs:
 
       - name: Compare fingerprints
         id: compare
+        if: steps.changes.outputs.code == 'true'
         run: |
           mkdir -p ci-meta
           node scripts/fingerprint.mjs compare --base "$RUNNER_TEMP/fp-base" --out ci-meta/fingerprint.json
 
+      # 이 PR 에서 같은 네이티브 상태(Android fingerprint + Maestro 흐름)로 e2e 가 이미 통과했나.
+      # 통과 표시는 e2e job 이 PR 범위 캐시에 남긴다 — 다른 PR·main 과 섞이지 않는다.
+      - name: Previous e2e pass
+        id: e2e
+        if: steps.compare.outputs.changed == 'true'
+        uses: actions/cache/restore@v5
+        with:
+          path: .e2e-pass
+          key: e2e-pass-${{ steps.compare.outputs.android }}-${{ hashFiles('.maestro/**') }}
+          lookup-only: true
+
       - name: Summary
         id: sources
+        if: steps.changes.outputs.code == 'true'
         run: |
           list=$(node -e 'const r=require("./ci-meta/fingerprint.json");process.stdout.write(r.sources.slice(0,10).join(","))')
           echo "list=$list" >> "$GITHUB_OUTPUT"
@@ -160,12 +218,17 @@ jobs:
               echo "### 🧱 네이티브 변경 — 새 빌드 필요 (OTA 불가)"
               echo ""
               echo "바뀐 요소: \`${list:-알 수 없음}\`"
+              if [ "${{ steps.e2e.outputs.cache-hit }}" = "true" ]; then
+                echo ""
+                echo "e2e ⏭️ — 이 PR 의 이전 커밋에서 같은 네이티브 상태로 통과했습니다. 마지막 커밋으로 다시 돌리려면 \`e2e\` 라벨을 붙이고 push 하세요."
+              fi
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo "### ⚡ 네이티브 변경 없음 — OTA 로 배포 가능" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - uses: actions/upload-artifact@v7
+        if: steps.changes.outputs.code == 'true'
         with:
           name: ci-meta-native
           path: ci-meta/fingerprint.json
@@ -181,6 +244,7 @@ jobs:
     needs: [test, fingerprint]
     if: >-
       github.event_name == 'pull_request'
+      && needs.test.outputs.full == 'true'
       && github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.repository.is_template
     runs-on: ubuntu-latest
@@ -299,14 +363,18 @@ jobs:
   # Android 에뮬레이터에서 실제 앱을 띄워 Maestro 흐름(.maestro/)을 돌린다. 네이티브 변경은 웹 스모크로
   # 검증되지 않으므로 이때 돈다. JS 변경도 돌리고 싶으면 PR 에 `e2e` 라벨을 붙이고 다음 커밋을 push 한다
   # (라벨 이벤트로는 CI 를 다시 돌리지 않는다 — 라벨 변경이 진행 중인 CI 를 취소하지 않게).
-  # EAS 를 쓰지 않고 러너에서 직접 빌드한다(EAS 무료 빌드 한도 보존).
+  # EAS 를 쓰지 않고 러너에서 직접 빌드한다(EAS 무료 빌드 한도 보존). 빌드+에뮬레이터는 한 번에 20~60분이라,
+  # 같은 PR 에서 같은 네이티브 상태로 이미 통과했으면 다시 돌리지 않는다 — 그 뒤의 JS 변경은 다른 JS PR 처럼
+  # jest·웹 스모크로 검증된다. `e2e` 라벨이 있으면 매번 돈다.
   # ---------------------------------------------------------------------------
   e2e:
     name: e2e
     needs: [test, fingerprint]
     if: >-
       github.event_name == 'pull_request'
-      && (needs.fingerprint.outputs.changed == 'true' || contains(github.event.pull_request.labels.*.name, 'e2e'))
+      && needs.test.outputs.full == 'true'
+      && ((needs.fingerprint.outputs.changed == 'true' && needs.fingerprint.outputs.e2e_passed != 'true')
+          || contains(github.event.pull_request.labels.*.name, 'e2e'))
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -376,6 +444,18 @@ jobs:
           disable-animations: true
           script: adb install -r android/app/build/outputs/apk/release/app-release.apk && maestro test -e APP_ID=${{ steps.apk.outputs.app_id }} --format junit --output maestro-report.xml .maestro
 
+      # 통과 표시. 다음 push 에서 fingerprint job 이 이걸 보고 같은 네이티브 상태면 e2e 를 건너뛴다.
+      - name: Remember the pass
+        if: needs.fingerprint.outputs.changed == 'true'
+        run: mkdir -p .e2e-pass && echo "$GITHUB_SHA" > .e2e-pass/sha
+
+      - uses: actions/cache/save@v5
+        if: needs.fingerprint.outputs.changed == 'true'
+        continue-on-error: true # e2e 라벨로 다시 돌아 같은 키가 이미 있으면 저장이 거절된다(정상)
+        with:
+          path: .e2e-pass
+          key: e2e-pass-${{ needs.fingerprint.outputs.android }}-${{ hashFiles('.maestro/**') }}
+
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
@@ -401,6 +481,7 @@ jobs:
     if: >-
       !cancelled()
       && needs.test.result == 'success'
+      && needs.test.outputs.full == 'true'
       && needs.fingerprint.result == 'success'
       && needs.preview.result != 'failure'
       && needs.e2e.result != 'failure'
@@ -411,6 +492,8 @@ jobs:
       && !contains(github.event.pull_request.labels.*.name, 'no-refine')
       && vars.CLAUDE_REFINE != 'false'
     runs-on: ubuntu-latest
+    # Claude 가 멈추면 기본 한도(6시간)까지 과금된다. --max-turns 40 이면 보통 10분 안에 끝난다.
+    timeout-minutes: 30
     permissions:
       contents: write
       pull-requests: write
@@ -624,6 +707,7 @@ jobs:
       && !contains(github.event.pull_request.labels.*.name, 'no-autofix')
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # Claude 가 멈춰도 6시간 과금되지 않게
     permissions:
       contents: write
       pull-requests: write

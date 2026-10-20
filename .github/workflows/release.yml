@@ -106,3 +106,20 @@ jobs:
             store) node scripts/release.mjs store --platforms "$PLATFORMS" ;;
             rollout) node scripts/release.mjs rollout --platforms "$PLATFORMS" --percent "$PERCENT" ;;
           esac
+
+  # rollout-monitor 는 할 일이 없으면 스스로 꺼진다. OTA 롤아웃이 시작·변경되면 다시 켠다.
+  # release 가 실패해도 켠다 — platforms=all 에서 android 는 나가고 ios 에서 실패하면 android 롤아웃이 감시 없이 남는다.
+  # 켜 두고 할 일이 없으면 다음 정기 실행이 다시 끈다.
+  # actions: write 는 이 job 에만 준다(npm ci·EAS 를 돌리는 release job 의 토큰에는 주지 않는다).
+  resume-monitor:
+    needs: [release]
+    if: ${{ !cancelled() && needs.release.result != 'skipped' && (inputs.kind == 'ota' || inputs.kind == 'rollout') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Enable rollout monitor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/rollout-monitor.yml/enable"
