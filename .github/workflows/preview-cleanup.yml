@@ -1,6 +1,6 @@
 name: Preview cleanup
 
-# PR 이 닫히면 그 PR 의 EAS Update 브랜치(pr-<n>)를 지운다. (웹 프리뷰 별칭은 남겨 두어도 비용이 없다.)
+# PR 이 닫히면 그 PR 의 EAS Update 브랜치(pr-<n>)를 지운다. (웹 프리뷰는 별칭 없이 배포마다 새 주소라 지울 것이 없다.)
 on:
   pull_request:
     types: [closed]

@@ -29,7 +29,7 @@ export function updateLinks(json, { owner, slug, projectId }) {
   return { group: first.group, runtime_version: String(first.runtimeVersion ?? ''), update_url: url };
 }
 
-/** `eas deploy` 출력 텍스트에서 *.expo.app 주소. 별칭(pr-7 등)을 줬으면 그 주소를 고른다(PR 마다 같은 주소). */
+/** `eas deploy` 출력 텍스트에서 *.expo.app 주소. 별칭을 줬으면 그 주소를 고른다(PR 프리뷰는 별칭 없이 배포 주소를 쓴다). */
 export function webUrl(text, alias = '') {
   const urls = [...String(text).matchAll(/https:\/\/[a-z0-9-]+(?:\.[a-z0-9-]+)*\.expo\.app\/?/g)].map((m) => m[0].replace(/\/$/, ''));
   return { web_url: (alias && urls.find((u) => u.endsWith(`--${alias}.expo.app`))) || urls[0] || '' };

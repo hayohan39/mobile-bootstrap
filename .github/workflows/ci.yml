@@ -235,7 +235,8 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # PR 프리뷰: 웹 export 를 EAS Hosting 의 pr-<n> 별칭에 올리고(아무 브라우저에서 열림),
+  # PR 프리뷰: 웹 export 를 EAS Hosting 에 올리고(push 마다 새 주소, 아무 브라우저에서 열림 — 별칭은 쓰지 않는다:
+  # 무료 플랜은 계정 전체에 별칭 5개까지라 PR 마다 pr-<n> 별칭을 만들면 금방 막힌다),
   # 네이티브 변경이 없으면 EAS Update 의 pr-<n> 브랜치에 OTA 를 올린다(개발 빌드에서 QR 로 열림).
   # 필요한 값이 없으면(템플릿 리포지토리, 프로비저닝 전) 건너뛴다.
   # ---------------------------------------------------------------------------
@@ -314,11 +315,11 @@ jobs:
         run: |
           npm run build:web
           set +e
-          eas deploy --alias "pr-$PR" --environment preview --non-interactive > deploy.log 2>&1
+          eas deploy --environment preview --non-interactive > deploy.log 2>&1
           status=$?
           set -e
           cat deploy.log
-          node scripts/eas-links.mjs web deploy.log "pr-$PR"
+          node scripts/eas-links.mjs web deploy.log
           exit "$status"
 
       # 네이티브 변경이면 기존 개발 빌드에서 열 수 없으므로 OTA 프리뷰를 올리지 않는다.
