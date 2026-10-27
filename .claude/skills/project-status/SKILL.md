@@ -20,7 +20,8 @@ git log origin/main --oneline -10    # 최근 merge
 gh issue list --search "롤아웃 자동 중단" --state open   # rollout-monitor 가 연 사고 이슈 (REST 실패 시 생략)
 ```
 
-스테이징 결과는 merge 된 PR 의 배포 코멘트(📦 OTA / 🧱 새 빌드 / ❌ / ⏭️)와 Actions 실행 요약에 있다.
+스테이징은 요청할 때만 올라간다. 결과는 그 스테이징에 포함된 PR 들의 코멘트(📦 OTA / 🧱 새 빌드 / ❌)와 Actions 실행 요약에 있다.
+마지막 스테이징 뒤에 merge 된 PR 이 있으면 "스테이징 안 올림 N개" 로 알린다.
 출시 비율·심사 상태는 EAS·스토어 콘솔에 있어 세션에서 직접 못 볼 수 있다 — release / rollout-monitor 실행 요약으로
 알 수 있는 만큼만 쓰고, 나머지는 "콘솔에서 확인 필요" 라고 적는다.
 그리고 `docs/decisions.md` 에서 "미결" 항목을 확인한다.
@@ -42,6 +43,6 @@ gh issue list --search "롤아웃 자동 중단" --state open   # rollout-monito
 
 - 사용자가 할 일(merge, 폰 확인, 출시 지시, `risk-accepted` 판단, 스토어 콘솔 버튼, 계정·키)은 굵게 표시한다.
 - 롤아웃 자동 중단·스테이징 실패·CRITICAL PR 은 맨 위에 올린다.
-- 🧱 네이티브 변경 PR 은 "merge 하면 새 스테이징 빌드를 설치해야 하고, 출시는 스토어 심사를 거친다" 를 한 번 상기시킨다.
+- 🧱 네이티브 변경 PR 은 "스테이징을 올리면 e2e 가 돌고 새 빌드를 설치해야 하며, 출시는 스토어 심사를 거친다" 를 한 번 상기시킨다.
 - Risk 점수는 숫자만 전하지 말고 가장 큰 위험 요인 한 가지를 같이 적는다.
 - 추측하지 않는다. 확인 못 한 항목은 "확인 못 함" 이라고 쓴다.

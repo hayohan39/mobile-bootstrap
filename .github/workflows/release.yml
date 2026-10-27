@@ -81,7 +81,7 @@ jobs:
           last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=20" \
             --jq '[.workflow_runs[] | ((.display_title | capture("(?<s>[0-9a-f]{40})") | .s)? // .head_sha)][0] // empty')
           if [ "$last" != "$GITHUB_SHA" ]; then
-            echo "::error::main(${GITHUB_SHA::7}) 이 마지막 스테이징 배포(${last:0:7})와 다릅니다. 스테이징 배포가 끝나고 폰에서 확인한 뒤 다시 실행하세요(무시하려면 force=true)."
+            echo "::error::main(${GITHUB_SHA::7}) 이 마지막 스테이징 배포(${last:0:7})와 다릅니다. 스테이징을 올리고(deploy.yml — 세션에서 "스테이징 올려줘") 폰에서 확인한 뒤 다시 실행하세요(무시하려면 force=true)."
             exit 1
           fi
 

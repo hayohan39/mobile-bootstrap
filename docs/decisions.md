@@ -47,4 +47,5 @@ Risk Score 의 Compatibility 판단에 쓰인다. 이 앱의 DB·RPC·Edge Funct
   Supabase 무료(2 프로젝트, 7일 미사용 시 일시정지) → 출시 앱은 Pro $25/월 권장.
   Apple Developer $99/년, Google Play $25(1회). Sentry 무료로 시작. Claude(API 사용량).
 - 영향: merge = 스테이징(내부 테스트) 배포, 출시는 release 워크플로. DB 는 스테이징·프로덕션이 공유.
+  (2026-10-27 변경: 스테이징은 merge 마다가 아니라 사용자가 요청할 때 여러 PR 을 모아 올린다 — main 검사·e2e·빌드를 한 번에.)
 - 되돌리는 법: OTA = rollback 워크플로, 스토어 빌드 = 롤아웃 중단 + 핫픽스(`docs/runbook.md`).

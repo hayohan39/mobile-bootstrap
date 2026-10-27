@@ -1,0 +1,74 @@
+name: Android e2e
+description: >-
+  Android release APK 를 러너에서 빌드하고 에뮬레이터에서 Maestro 흐름(.maestro/)을 돌린다 — 빌드가 되고, 켜자마자 죽지 않는지.
+  ci.yml 의 e2e job(PR 에 `e2e` 라벨)과 deploy.yml 의 스테이징(네이티브가 바뀌었을 때)이 같이 쓴다.
+  부르는 쪽이 checkout · setup-node · npm ci 를 먼저 한다. EAS 를 쓰지 않는다(EAS 무료 빌드 한도 보존).
+runs:
+  using: composite
+  steps:
+    # 기본 러너 디스크로는 Android 빌드 + 에뮬레이터 이미지가 들어가지 않는다. 쓰지 않는 도구를 지운다.
+    - name: Free disk space
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost \
+          /opt/hostedtoolcache/CodeQL /usr/share/swift /usr/local/share/powershell /usr/local/julia*
+        df -h /
+
+    # android/ 는 prebuild 가 만들므로 gradle 파일 대신 package-lock.json(네이티브 의존성)으로 캐시 키를 만든다.
+    - uses: actions/setup-java@v6
+      with:
+        distribution: temurin
+        java-version: "17"
+        cache: gradle
+        cache-dependency-path: package-lock.json
+
+    - name: Build release APK
+      id: apk
+      shell: bash
+      env:
+        # 이 APK 는 에뮬레이터 검사용이라 Sentry 소스맵을 올리지 않는다(토큰이 없으면 빌드가 실패한다).
+        SENTRY_DISABLE_AUTO_UPLOAD: "true"
+      run: |
+        npx expo prebuild --platform android --no-install --clean
+        # 기본값(힙 2GB·Metaspace 512MB)으로는 Metaspace 가 모자라 빌드가 멈춘다.
+        # 너무 크게 잡으면 Kotlin 데몬·워커까지 합쳐 러너(16GB)가 메모리 부족으로 꺼진다.
+        sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1536m/' android/gradle.properties
+        printf '\nkotlin.daemon.jvmargs=-Xmx2g\norg.gradle.workers.max=3\n' >> android/gradle.properties
+        # 에뮬레이터 검사용 APK 라 release lint 는 끈다(스토어 빌드는 EAS 가 따로 한다).
+        printf '\nandroid { lint { checkReleaseBuilds = false } }\n' >> android/app/build.gradle
+        # 에뮬레이터(x86_64) 아키텍처만 빌드한다.
+        (cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64)
+        df -h / && free -g
+        echo "app_id=$(node -p 'require("./app.json").expo.android.package')" >> "$GITHUB_OUTPUT"
+
+    - name: Enable KVM
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Install Maestro
+      shell: bash
+      run: |
+        curl -fsSL "https://get.maestro.mobile.dev" | bash
+        echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+    - name: Run Maestro on the emulator
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        arch: x86_64
+        target: google_apis
+        disable-animations: true
+        script: adb install -r android/app/build/outputs/apk/release/app-release.apk && maestro test -e APP_ID=${{ steps.apk.outputs.app_id }} --format junit --output maestro-report.xml .maestro
+
+    - uses: actions/upload-artifact@v7
+      if: failure()
+      with:
+        name: maestro-report
+        path: |
+          maestro-report.xml
+          ~/.maestro/tests/
+        retention-days: 7

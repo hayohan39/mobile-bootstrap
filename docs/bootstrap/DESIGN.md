@@ -34,19 +34,21 @@ Docker 데몬이 없어 로컬 Supabase 는 못 띄운다 → 세션의 일반 P
   비교는 네트워크 없이 `expo-updates runtimeversion:resolve` 로 한다.
 - 스테이징 배포는 "같은 fingerprint 의 스테이징 빌드가 있으면 OTA, 없으면 새 빌드" — 사람이 판단하지 않는다.
 
-## 4. merge = 스테이징, 출시 = 사람의 요청
+## 4. merge = 쌓기, 스테이징·출시 = 사람의 요청
 
 웹 production-bootstrap 은 merge = 프로덕션이었다(스테이징 스모크 + 자동 롤백이 안전망). 앱은
 
 - 스토어 빌드는 심사를 거치고 되돌릴 수 없으며, 자동 스모크로 확인할 수 없는 것(권한, 푸시, 결제, 실제 기기 성능)이 많다.
-- 그래서 merge 는 **스테이징 채널**(내부 테스트 앱)까지만 가고, 사람이 폰으로 확인한 뒤 "출시해줘" 로 `release.yml` 을 부른다.
+- 그래서 merge 는 main 에 쌓기만 하고, 사람이 "스테이징 올려줘" 로 여러 PR 을 모아 **스테이징 채널**(내부 테스트 앱)에 올린다.
+  그때 main 전체 검사와 (네이티브가 바뀌었으면) Android e2e 를 한 번 돌린다 — merge 마다 돌리면 확인하지도 않을 스테이징에 시간을 쓴다.
+  폰으로 확인한 뒤 "출시해줘" 로 `release.yml` 을 부른다.
 - OTA 출시도 바로 100% 가 아니라 **10% 롤아웃**으로 시작하고 `rollout-monitor.yml` 이 Sentry crash-free 로 올리거나 취소한다.
 - 스토어 출시는 `main` 이 마지막 스테이징 배포 커밋과 같을 때만(확인하지 않은 코드가 섞이지 않게).
 
 ## 5. DB 는 하나 — 스테이징과 프로덕션이 공유
 
 스테이징 전용 Supabase 프로젝트를 두면 무료 플랜 2개를 다 쓰고, 마이그레이션이 두 번 돌고, 스테이징에서 본 데이터와
-실제가 달라진다. 대신 **DB 마이그레이션은 merge 순간 프로덕션에 적용**되고, expand → contract 규칙과 Risk 규칙
+실제가 달라진다. 대신 **DB 마이그레이션은 스테이징을 올리는 순간 프로덕션에 적용**되고, expand → contract 규칙과 Risk 규칙
 (출시된 앱이 쓰는 이름 삭제 = CRITICAL, RLS 없는 테이블 = VERY HIGH)이 이를 안전하게 한다.
 PR 단계의 DB 검증은 CI 의 로컬 Supabase 에서 빈 DB 부터 모든 마이그레이션 + RLS 테스트. 프로덕션 데이터로 미리 돌려 보는
 웹 템플릿의 "프로덕션 복제 브랜치" 는 Supabase Branching(유료)이 있어야 해서 넣지 않았다 — 필요해지면 decisions.md 에.
@@ -111,10 +113,10 @@ GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다�
 
 | 낭비 | 막는 방법 |
 | --- | --- |
-| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | `e2e` 라벨이 있을 때만 돈다(네이티브 변경의 기본 검증은 merge 후 스테이징 빌드). 라벨이 있어도 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시) |
+| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | PR 에서는 `e2e` 라벨이 있을 때만 돈다. 네이티브가 바뀐 스테이징을 올릴 때 한 번 돈다(단계는 `.github/actions/android-e2e` 로 공유). 라벨이 있어도 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시) |
 | 품질 리뷰(refine)가 push 마다 + 정리 커밋이 CI 를 한 번 더 | PR 당 1회: 시작할 때 `quality-reviewed` 라벨을 붙이고, 라벨이 있으면 job 이 건너뛴다(러너도 뜨지 않음) |
 | 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·품질 리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정(이름 바꾸기는 옛 경로까지) → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀. deploy 는 **마지막 성공 배포** 이후가 문서뿐일 때만 건너뜀 — 앞선 배포가 실패·취소됐으면 그 코드까지 배포한다 |
-| (일부러 쓰는 시간) merge 후 main 에서 test 를 다시 | 브랜치 보호가 "최신 main 포함"(strict)을 요구하지 않아 merge 결과물은 PR 에서 검사되지 않는다. main push 에서는 test 만(항상 전체 — 앞선 merge 의 CI 가 취소됐을 수 있어서) 돌고, deploy.yml 은 그 test 가 통과한 뒤 `workflow_run` 으로 시작한다. strict 를 켜면 PR 마다 "Update branch" 로 CI 전체가 한 번 더 돌아 더 비싸다 |
+| merge 마다 스테이징(OTA·새 빌드) — 확인하지도 않을 배포 | merge 때는 아무것도 돌지 않는다. 스테이징은 요청할 때(deploy.yml 수동 실행) 여러 PR 을 모아 한 번: main 전체 검사(브랜치 보호가 "최신 main 포함" 을 요구하지 않아 merge 결과물은 PR 에서 검사되지 않았다) → 네이티브가 바뀌었으면 e2e → DB → OTA·빌드. strict 를 켜면 PR 마다 "Update branch" 로 CI 전체가 한 번 더 돌아 더 비싸다 |
 | Dependabot 이 쉬는 리포에도 매주 PR → CI·리뷰 | Dependabot 버전 업데이트를 쓰지 않는다. 의존성은 세션에서 요청해 올린다. 보안 알림(Dependabot alerts)은 리포 설정에서 켠다(PR·Actions 없음) |
 | 출시 전·롤아웃 100% 뒤에도 매일 도는 rollout-monitor(실행마다 npm ci + EAS CLI) | 할 일이 없으면 스스로 disable, release.yml(kind=ota·rollout)이 enable. `actions: write` 는 그 한 줄짜리 job 에만(EXPO_TOKEN 을 쓰는 job 에는 주지 않는다) |
 | job 이 멈추면 기본 한도 6시간 과금 | 모든 job 에 timeout(평소 시간의 2~3배): test 20분 · preview 15분 · refine 20분 · autofix 25분 · @claude 45분 · 1분짜리 job 5~10분 |
@@ -122,9 +124,9 @@ GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다�
 `test` 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 체크이고, `scripts/risk/cli.mjs ci` 가 `test == success` 를 CI 통과
 조건으로 본다(skipped 면 AI 리뷰가 "CI 실패" 로 빠진다). 그래서 job 은 돌되 스텝을 건너뛴다(1분).
 draft PR 도 같은 검사를 돈다(Ready for review 때 CI 와 PR 리뷰가 다시 돈다).
-e2e 를 라벨로만 돌리는 것은 의도한 절충이다: 네이티브 변경이 앱을 켜자마자 깨뜨려도 merge 전에는 모르고,
-merge 후 스테이징 빌드(EAS)에서 드러난다. 스테이징은 사용자 본인만 쓰고 출시는 따로 하므로 그 비용이 e2e 의 20~60분보다 작다고 봤다.
-라벨이 있어도 네이티브 상태가 같으면 뒤의 JS 변경은 jest·웹 스모크로만 본다(새 네이티브 모듈을 잘못 부르는 JS 는 못 잡을 수 있다).
-`workflow_run` 으로 시작한 deploy 의 `head_sha` 는 그 순간의 main 이라 배포한 커밋과 다를 수 있다 — 그래서 `run-name` 에 배포한
-커밋을 넣고, "마지막으로 성공한 배포" 는 그 이름에서 읽는다(deploy.yml · release.yml).
+e2e 를 PR 이 아니라 스테이징에서 돌리는 것은 의도한 절충이다: 네이티브 변경이 앱을 켜자마자 깨뜨려도 merge 전에는 모르고,
+스테이징을 올릴 때 e2e 에서 드러난다(실패하면 DB·앱 배포 전에 멈춘다). merge 는 스테이징·출시가 아니므로 main 이 잠시 깨져도
+사용자 폰에는 닿지 않는다. 미리 보고 싶은 PR 에는 `e2e` 라벨을 붙인다(같은 네이티브 상태로 통과했으면 다시 안 돎).
+"마지막으로 성공한 스테이징" 은 deploy.yml 의 실행 이름(run-name 에 배포 커밋)에서 읽는다(deploy.yml · release.yml).
+검사·e2e·DB·앱 중 하나라도 실패한 실행은 실패로 끝나 기준이 되지 않는다.
 EAS 클라우드 빌드는 원래 fingerprint 가 바뀔 때만 만들고 `--no-wait` 라 Actions 가 기다리지 않는다.
