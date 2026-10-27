@@ -57,7 +57,7 @@ claude.ai/code 에서 새 세션을 열어 `<owner>/<name>` 을 고르라고 안
 
 ## 사용자에게 남는 일 (체크리스트로 알린다)
 
-- 첫 스테이징 빌드가 끝나면 merge 코멘트/EAS 링크에서 **APK 를 Android 폰에 설치**(iPhone 은 Apple 계정 연결 후 TestFlight).
+- 첫 스테이징 빌드(new-project 가 실행)가 끝나면 Actions 요약/EAS 링크에서 **APK 를 Android 폰에 설치**(iPhone 은 Apple 계정 연결 후 TestFlight).
 - 새 리포지토리의 `docs/runbook.md` "처음 한 번": Sentry, Supabase 플랜·Auth 설정.
 - 스토어 계정(오래 걸림): `docs/STORE-LAUNCH.md` 0번 — 특히 Google Play 개인 계정의 **테스터 12명·14일 비공개 테스트**.
 - 워크플로 요약의 ⚠️ 항목(DB URL 시크릿, EAS 연결, 브랜치 규칙).

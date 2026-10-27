@@ -1,22 +1,34 @@
 name: Deploy (staging)
+# 배포한 커밋을 실행 이름에 남긴다 — release.yml 의 "Staging was verified" 와 다음 스테이징의 비교 기준이 이 이름을 읽는다.
+run-name: Deploy ${{ github.sha }}
 
-# merge(main push) = 스테이징 배포. 사용자에게 내보내는 출시는 release.yml(사람의 요청)로 따로 한다.
+# 스테이징 = 사용자가 요청할 때만(세션에서 "스테이징 올려줘" → node scripts/gh.mjs dispatch deploy.yml). merge 때는 돌지 않는다.
+# 여러 PR 을 merge 해 두고 한 번에 폰에서 확인하는 흐름이다. 사용자에게 내보내는 출시는 release.yml(사람의 요청)로 따로 한다.
 #
+#   plan      마지막으로 성공한 스테이징 이후 무엇이 바뀌었나: 문서뿐인가(scripts/ci-changes.mjs), 네이티브가 바뀌었나(fingerprint)
+#   check     main 전체 검사(npm run check + Expo 버전 확인) — merge 결과물은 PR 에서 검사된 적이 없다
+#   e2e       네이티브가 바뀌었으면 Android 에뮬레이터 e2e(.github/actions/android-e2e, 20~60분). 입력 e2e 로 강제·생략
 #   database  프로덕션 Supabase 에 마이그레이션(supabase db push) → Edge Functions 배포
 #             (스테이징 앱과 프로덕션 앱이 같은 DB 를 쓴다 — 그래서 마이그레이션은 expand → contract)
 #   app       플랫폼마다: 지금 코드와 fingerprint 가 같은 스테이징 빌드가 있으면 OTA(channel staging),
 #             없으면 스테이징 빌드를 새로 만든다(Android 내부 배포 APK / iOS TestFlight)
-#   report    merge 된 PR 에 결과 코멘트 (📦 OTA · 🧱 새 빌드 · ❌ 실패 · ⏭️ 건너뜀)
+#   report    이번 스테이징에 들어간 PR 들에 결과 코멘트 (📦 OTA · 🧱 새 빌드 · ❌ 실패)
 #
-# 설정이 없으면(프로비저닝 전, 템플릿 리포지토리) 실패가 아니라 건너뛴다 — main 이 빨갛게 되지 않게.
-# 문서만 바뀐 merge(scripts/ci-changes.mjs)는 배포하지 않는다 — 같은 앱을 OTA 로 다시 올리는 데 Actions 시간을 쓰지 않게.
-# 비교 기준은 직전 push 가 아니라 **마지막으로 성공한 배포**다. 앞선 배포가 실패했거나 대기 중에 취소됐으면
-# 그 코드까지 포함해서 판정하므로, 문서 merge 가 배포되지 않은 코드를 덮어 "성공" 으로 끝나지 않는다
-# (release.yml 의 "Staging was verified" 가 마지막 성공 배포의 커밋을 기준으로 삼는다).
+# 검사·e2e·DB·앱 중 하나라도 실패하면 그 뒤는 하지 않고 실행은 실패로 끝난다("마지막 성공 스테이징" 으로 집계되지 않는다).
+# 마지막 성공 스테이징 이후 바뀐 것이 문서뿐이면 아무것도 하지 않는다(입력 force 로 강제).
+# 설정이 없으면(프로비저닝 전, 템플릿 리포지토리) 실패가 아니라 건너뛴다.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      e2e:
+        description: "e2e — auto: 네이티브가 바뀌었을 때만 · always: 항상 · skip: 건너뜀"
+        type: choice
+        options: [auto, always, skip]
+        default: auto
+      force:
+        description: "바뀐 것이 문서뿐이어도 배포"
+        type: boolean
+        default: false
 
 concurrency:
   group: deploy-staging
@@ -31,49 +43,142 @@ permissions:
 
 env:
   EXPO_NO_TELEMETRY: "1"
+  DEPLOY_SHA: ${{ github.sha }}
 
 jobs:
+  plan:
+    # main 에서만 — 다른 브랜치를 골라 실행하면 리뷰·merge 되지 않은 코드의 마이그레이션이 프로덕션 DB 에 들어간다.
+    if: ${{ !github.event.repository.is_template && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # 마지막으로 성공한 스테이징 찾기
+    outputs:
+      last: ${{ steps.last.outputs.sha }}
+      code: ${{ inputs.force && 'true' || steps.changes.outputs.code || 'true' }}
+      native: ${{ steps.native.outputs.changed || 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # 배포한 커밋은 실행 이름(run-name)에서 읽는다. 이름에 커밋이 없는 옛 실행(push 로 시작)은 head_sha 가 그 커밋이다.
+      - name: Last successful staging
+        id: last
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=20" \
+            --jq '[.workflow_runs[] | ((.display_title | capture("(?<s>[0-9a-f]{40})") | .s)? // .head_sha)][0] // empty' || true)
+          echo "마지막 성공 스테이징: ${last:-(없음 — 첫 스테이징)}"
+          echo "sha=$last" >> "$GITHUB_OUTPUT"
+
+      # 첫 스테이징이면 비교하지 않는다(code=true, native=true).
+      - name: Changed since then
+        id: changes
+        if: steps.last.outputs.sha != ''
+        env:
+          LAST: ${{ steps.last.outputs.sha }}
+        run: |
+          node scripts/ci-changes.mjs --base "$LAST" --head "$GITHUB_SHA"
+          if grep -q '^code=false' "$GITHUB_OUTPUT" && [ "${{ inputs.force }}" != true ]; then
+            echo "### 📝 마지막 스테이징 이후 문서만 바뀜 — 아무것도 하지 않습니다(강제하려면 force)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/setup-node@v7
+        if: steps.last.outputs.sha != '' && steps.changes.outputs.code != 'false'
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # 양쪽 모두 install 스크립트 없이 설치해 같은 조건으로 비교한다(ci.yml 의 fingerprint job 과 같은 방식).
+      - name: Native change since then
+        id: native
+        if: steps.last.outputs.sha != '' && steps.changes.outputs.code != 'false'
+        env:
+          LAST: ${{ steps.last.outputs.sha }}
+        run: |
+          npm ci --ignore-scripts
+          git worktree add --detach "$RUNNER_TEMP/fp-base" "$LAST"
+          (cd "$RUNNER_TEMP/fp-base" && npm ci --ignore-scripts)
+          node scripts/fingerprint.mjs compare --base "$RUNNER_TEMP/fp-base"
+
+  # merge 결과물을 한 번 검사한다. PR 의 test job 과 같은 검사(npm run check = lint · 타입 · vitest(+DB·RLS) · jest · 웹 export · 웹 스모크).
+  check:
+    needs: [plan]
+    if: needs.plan.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25 # 평소 6~10분
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Start local Supabase database
+        run: |
+          npx supabase db start
+          echo "TEST_DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres" >> "$GITHUB_ENV"
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: npm run check
+        run: npm run check
+
+      - name: Expo dependency versions
+        run: npx expo install --check
+
+  e2e:
+    needs: [plan, check]
+    if: >-
+      needs.plan.outputs.code == 'true'
+      && (inputs.e2e == 'always' || (inputs.e2e != 'skip' && needs.plan.outputs.native == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - uses: ./.github/actions/android-e2e
+
   database:
-    if: ${{ !github.event.repository.is_template }}
+    needs: [plan, check, e2e]
+    if: >-
+      !cancelled()
+      && needs.plan.outputs.code == 'true'
+      && needs.check.result == 'success'
+      && (needs.e2e.result == 'success' || needs.e2e.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
-    permissions:
-      contents: read
-      actions: read # 마지막으로 성공한 배포 찾기
     outputs:
       result: ${{ steps.result.outputs.value }}
-      code: ${{ steps.changes.outputs.code || 'true' }}
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      # 수동 실행(workflow_dispatch)은 항상 배포한다. 성공한 배포가 없으면(첫 배포) base 가 비어 code=true.
-      - name: Changed since the last successful deploy
-        id: changes
-        if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' || true)
-          echo "마지막 성공 배포: ${last:-(없음)}"
-          node scripts/ci-changes.mjs --base "$last" --head "$GITHUB_SHA"
 
       - name: Check configuration
         id: guard
-        env:
-          CODE: ${{ steps.changes.outputs.code || 'true' }}
         run: |
-          if [ "$CODE" != true ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "### 📝 문서만 바뀜 — 스테이징 배포를 건너뜁니다" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
           migrations=$(ls supabase/migrations/*.sql 2>/dev/null | wc -l | tr -d ' ')
           functions=$(find supabase/functions -mindepth 2 -maxdepth 2 -name index.ts -not -path '*/_*' 2>/dev/null | wc -l | tr -d ' ')
           echo "migrations=$migrations" >> "$GITHUB_OUTPUT"
@@ -132,7 +237,7 @@ jobs:
 
   app:
     needs: [database]
-    if: ${{ !cancelled() && needs.database.result == 'success' && needs.database.outputs.code != 'false' && !github.event.repository.is_template }}
+    if: ${{ !cancelled() && needs.database.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -142,7 +247,6 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
-      COMMIT_TITLE: ${{ github.event.head_commit.message }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
@@ -152,6 +256,7 @@ jobs:
       - name: Check configuration
         id: guard
         run: |
+          echo "COMMIT_TITLE=$(git log -1 --format=%s)" >> "$GITHUB_ENV"
           if [ -z "$EXPO_TOKEN" ] || ! node -e 'process.exit(require("./app.json").expo?.extra?.eas?.projectId ? 0 : 1)'; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "### ⏭️ 앱 배포 건너뜀 — EXPO_TOKEN 시크릿 또는 app.json 의 EAS projectId 가 없습니다(프로비저닝 전)." >> "$GITHUB_STEP_SUMMARY"
@@ -194,27 +299,34 @@ jobs:
           [ -s report.md ] && echo "report=$(base64 -w0 report.md)" >> "$GITHUB_OUTPUT" || true
 
   report:
-    needs: [database, app]
-    if: ${{ always() && needs.database.outputs.code != 'false' && !github.event.repository.is_template }}
+    needs: [plan, check, e2e, database, app]
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.code == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
     steps:
-      - name: Comment on the merged PR
+      - name: Comment on the PRs in this staging
         env:
           GH_TOKEN: ${{ github.token }}
+          LAST: ${{ needs.plan.outputs.last }}
+          CHECK: ${{ needs.check.result }}
+          E2E: ${{ needs.e2e.result }}
           DB: ${{ needs.database.outputs.result || needs.database.result }}
           APP: ${{ needs.app.outputs.result || needs.app.result }}
           MODES: ${{ needs.app.outputs.modes }}
           REPORT: ${{ needs.app.outputs.report }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].number // empty' || true)
-          if [ "$DB" = failure ] || [ "$APP" = failure ]; then
+          if [ "$CHECK" != success ]; then
+            head="❌ 스테이징 중단 — main 검사(npm run check)가 실패해 배포하지 않았습니다. 실행 로그를 확인하세요."
+          elif [ "$E2E" = failure ] || [ "$E2E" = cancelled ]; then
+            head="❌ 스테이징 중단 — e2e(Android 에뮬레이터)가 실패해 배포하지 않았습니다. 실행의 maestro-report 아티팩트를 확인하세요."
+          elif [ "$DB" = failure ] || [ "$APP" = failure ]; then
             head="❌ 스테이징 배포 실패 — DB: $DB · 앱: $APP. 실행 로그를 확인하세요(DB 마이그레이션이 실패했으면 앱은 배포하지 않았습니다)."
           elif [ "$APP" = success ] && [[ "$MODES" == *build* ]]; then
-            head="🧱 스테이징 빌드를 새로 만듭니다(네이티브 변경). 빌드가 끝나면 폰에 새로 설치해 확인하세요."
+            head="🧱 스테이징 빌드를 새로 만듭니다(네이티브 변경${E2E:+, e2e $E2E}). 빌드가 끝나면 폰에 새로 설치해 확인하세요."
           elif [ "$APP" = success ]; then
             head="📦 스테이징에 OTA 로 배포했습니다. 스테이징 앱을 껐다 켜면 받습니다."
           else
@@ -224,7 +336,15 @@ jobs:
           [ -n "$REPORT" ] && details=$(printf '%s' "$REPORT" | base64 -d)
           body=$(printf '%s\n\n%s\n\n출시하려면 세션에서 "출시해줘" 라고 요청하세요. · [실행 로그](%s)' "$head" "$details" "$RUN_URL")
           echo "$body" >> "$GITHUB_STEP_SUMMARY"
-          if [ -n "$pr" ]; then
-            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$pr/comments" -f body="$body" >/dev/null
+          # 이번 스테이징에 들어간 PR: 마지막 성공 스테이징 이후의 커밋들이 속한 merge 된 PR(최대 20개).
+          if [ -n "$LAST" ]; then
+            shas=$(gh api "repos/$GITHUB_REPOSITORY/compare/$LAST...$DEPLOY_SHA" --jq '.commits[].sha' || true)
+          else
+            shas="$DEPLOY_SHA"
           fi
-          [ "$DB" != failure ] && [ "$APP" != failure ]
+          prs=$(for s in $shas; do gh api "repos/$GITHUB_REPOSITORY/commits/$s/pulls" --jq '.[] | select(.merged_at != null) | .number' || true; done | sort -un | tail -n 20)
+          for pr in $prs; do
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$pr/comments" -f body="$body" >/dev/null
+          done
+          echo "코멘트한 PR: ${prs:-없음}"
+          [ "$CHECK" = success ] && [ "$E2E" != failure ] && [ "$E2E" != cancelled ] && [ "$DB" != failure ] && [ "$APP" != failure ]

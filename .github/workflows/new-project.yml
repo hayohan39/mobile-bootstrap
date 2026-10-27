@@ -163,7 +163,7 @@ jobs:
           REGION: ${{ vars.SUPABASE_REGION || 'ap-northeast-2' }}
         run: node scripts/provision.mjs --repo "$TARGET" --scheme "$SCHEME" --region "$REGION"
 
-      # 마지막에 push 한다. 이 push 가 새 리포지토리의 deploy.yml 을 깨워 첫 스테이징 빌드가 시작된다.
+      # 마지막에 push 하고, 새 리포지토리의 deploy.yml 을 실행해 첫 스테이징 빌드를 시작한다(merge·push 로는 돌지 않는다).
       - name: Initialize the project, link EAS and push
         id: init
         env:
@@ -214,12 +214,13 @@ jobs:
 
           git add -A
           if git diff --cached --quiet; then
-            echo "바뀐 것이 없습니다. 스테이징 배포를 다시 깨웁니다."
-            gh workflow run deploy.yml -R "$TARGET" || true
+            echo "바뀐 것이 없습니다. 스테이징 배포를 다시 실행합니다."
           else
             if [ "$INIT" = done ]; then git commit -m "chore: mobile-bootstrap 에서 $NAME 초기화"; else git commit -m "chore: EAS 프로젝트 연결"; fi
             git push origin main
+            sleep 5 # 새 커밋의 워크플로가 등록될 시간
           fi
+          gh workflow run deploy.yml -R "$TARGET" || echo "::warning::첫 스테이징을 시작하지 못했습니다 — 새 리포지토리에서 Actions → Deploy (staging) → Run workflow"
 
       # 초기화 push 뒤에 건다(먼저 걸면 초기화 커밋을 main 에 직접 push 할 수 없다).
       # 비공개 리포는 GitHub Pro/Team 이상이어야 한다. 실패해도 프로젝트는 쓸 수 있고 요약에서 알린다.

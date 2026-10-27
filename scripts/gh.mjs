@@ -11,6 +11,7 @@
 //   node scripts/gh.mjs deploys                       최근 스테이징 배포·출시·롤백 실행 결과
 //   node scripts/gh.mjs risk-history [--limit 20]     merge 된 PR 의 Risk 등급과 배포 결과 (점수 보정용)
 //   node scripts/gh.mjs dispatch <workflow.yml> [key=value ...]
+//       스테이징 올리기: dispatch deploy.yml [e2e=auto|always|skip] [force=true]
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
@@ -167,7 +168,9 @@ try {
       all.sort((a, b) => b.created_at.localeCompare(a.created_at));
       for (const run of all.slice(0, 10)) {
         const mark = run.status !== 'completed' ? '⏳' : run.conclusion === 'success' ? '✅' : run.conclusion === 'skipped' ? '⏭️' : '❌';
-        console.log(`${mark} ${run.created_at.slice(0, 16).replace('T', ' ')} [${run.label}] ${run.head_sha.slice(0, 7)} ${run.display_title}\n   ${run.html_url}`);
+        // 배포한 커밋은 deploy.yml 의 실행 이름(run-name)에 있다. 이름에 커밋이 없는 옛 실행은 head_sha 를 쓴다.
+        const sha = run.display_title.match(/\b[0-9a-f]{40}\b/)?.[0] ?? run.head_sha;
+        console.log(`${mark} ${run.created_at.slice(0, 16).replace('T', ' ')} [${run.label}] ${sha.slice(0, 7)} ${run.display_title}\n   ${run.html_url}`);
       }
       if (!all.length) console.log('배포 기록 없음');
       break;

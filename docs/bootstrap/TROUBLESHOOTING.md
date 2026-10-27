@@ -29,7 +29,7 @@
 (`package.json` 의 `supabase`)을 확인.
 
 **`Expo dependency versions`(`expo install --check`) 실패** — SDK 와 맞지 않는 버전의 패키지가 들어왔다. 세션에서
-`npx expo install --fix` 후 커밋. Dependabot 이 Expo 패키지를 올리지 않게 막아 두었다(`.github/dependabot.yml`).
+`npx expo install --fix` 후 커밋. Expo SDK 에 묶인 패키지는 `npm install` 이 아니라 `npx expo install` 로 올린다.
 
 **`fingerprint` job 실패** — base 쪽 `npm ci` 실패(옛 lockfile)거나 `app.json` 이 깨졌다. 로그의 `runtimeversion:resolve` 오류를 본다.
 
@@ -65,7 +65,7 @@ Claude 가 어떤 토큰으로 push 하는지의 문제다. 증상별 원인은 
 **release `kind=ota` 실패: "프로덕션 빌드가 없습니다"** — 그 runtimeVersion 의 production 빌드가 없다. 네이티브가 바뀌었거나
 아직 스토어 출시를 한 번도 안 했다 → `kind=store`.
 
-**release `kind=store` 실패: "마지막 스테이징 배포와 다릅니다"** — merge 후 스테이징 배포가 끝나기 전이거나 실패했다.
+**release `kind=store` 실패: "마지막 스테이징 배포와 다릅니다"** — 마지막 스테이징 뒤에 merge 된 것이 있거나 스테이징이 실패했다. "스테이징 올려줘"(`dispatch deploy.yml`)부터.
 확인 후 다시, 또는 `force=true`.
 
 **rollout-monitor 가 롤아웃을 안 올림** — Sentry 설정(`SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`)이 없거나

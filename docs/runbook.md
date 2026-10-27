@@ -6,8 +6,8 @@ Claude 세션에서 "출시해줘", "앱이 죽어", "되돌려줘" 라고 하�
 ## 한눈에: 코드가 사용자 폰까지 가는 길
 
 ```
-PR merge ──► 스테이징 (deploy.yml, 자동)          ──► 사람이 폰으로 확인 ──► 출시 (release.yml, 요청 시)
-             · DB 마이그레이션 = 프로덕션에 바로 적용                         · kind=ota   : production OTA 10% → 50 → 100%
+PR merge(쌓기) ──► 스테이징 (deploy.yml, "스테이징 올려줘") ──► 사람이 폰으로 확인 ──► 출시 (release.yml, 요청 시)
+             · main 검사 → e2e(네이티브 변경 때) → DB 마이그레이션 = 프로덕션에 바로 적용                         · kind=ota   : production OTA 10% → 50 → 100%
              · JS 변경 → 스테이징 앱에 OTA                                    · kind=store : 프로덕션 빌드 → 스토어 심사 → 단계적 출시
              · 네이티브 변경 → 스테이징 빌드 새로(설치 필요)
 ```
@@ -16,7 +16,7 @@ PR merge ──► 스테이징 (deploy.yml, 자동)          ──► 사람�
 | --- | --- | --- | --- |
 | JS 만 (fingerprint 같음) | OTA, 몇 분 | `kind=ota` — 심사 없음, 단계적 | `rollback.yml` — 몇 분 |
 | 네이티브 (fingerprint 바뀜) | 새 빌드(Android APK / iOS TestFlight) | `kind=store` — 심사 1~3일, 단계적 | **불가** — 롤아웃 중단 + 킬스위치 + 핫픽스 |
-| DB (마이그레이션) | merge 순간 프로덕션에 적용 | — | 새 마이그레이션 / 백업·PITR |
+| DB (마이그레이션) | 스테이징을 올리는 순간 프로덕션에 적용 | — | 새 마이그레이션 / 백업·PITR |
 
 ## 처음 한 번 (프로젝트를 만든 직후)
 
@@ -32,7 +32,7 @@ PR merge ──► 스테이징 (deploy.yml, 자동)          ──► 사람�
 
 ## 출시 ("출시해줘")
 
-1. `node scripts/gh.mjs deploys` — 마지막 스테이징 배포가 성공했는지, 그 뒤에 merge 된 것이 없는지.
+1. `node scripts/gh.mjs deploys` — 마지막 스테이징 배포가 성공했는지, 그 뒤에 merge 된 것이 없는지(있으면 스테이징부터: `dispatch deploy.yml`).
 2. 사용자에게 확인: **스테이징 앱에서 무엇을 확인했는지.** 확인 전이면 출시하지 않는다.
 3. 네이티브 변경이 스테이징에 있었는지(📦 OTA 만이었나 🧱 빌드가 있었나):
    - **OTA 만** → `node scripts/gh.mjs dispatch release.yml kind=ota rollout=10`
@@ -65,7 +65,7 @@ PR merge ──► 스테이징 (deploy.yml, 자동)          ──► 사람�
 
 > OTA 롤백·스토어 출시 중지는 **DB 를 되돌리지 않는다.** expand → contract 를 지켰다면 이전 앱은 새 스키마에서 그대로 돈다.
 
-## 스테이징 배포가 실패했을 때 (merge 된 PR 의 코멘트별)
+## 스테이징 배포가 실패했을 때 (스테이징에 포함된 PR 의 코멘트별)
 
 | 코멘트 | 상태 | 할 일 |
 | --- | --- | --- |
@@ -105,7 +105,8 @@ EAS 가 보관하므로 보통 잃지 않는다. 계정 사고로 Android 업로
 ## 정기 점검 (월 1회)
 
 - `node scripts/gh.mjs risk-history` — 등급과 실제 결과(스테이징 실패, 출시 후 롤백)가 맞는지(점수 보정).
-- Dependabot PR 처리(보안 업데이트 우선). Expo SDK 는 1년에 2~3번 나온다 — SDK 업그레이드는 별도 PR·스토어 출시.
+- 의존성: 리포의 보안 알림(Security → Dependabot alerts)을 보고 필요한 것을 세션에서 올린다("supabase-js 보안 업데이트 해줘").
+  Dependabot 버전 업데이트 PR 은 쓰지 않는다(쉬는 달에도 Actions 시간을 쓴다). Expo SDK 는 1년에 2~3번 나온다 — SDK 업그레이드는 별도 PR·스토어 출시.
 - 스토어 요구사항: Google Play target API 마감(매년 8월 말), Apple 의 새 Xcode·SDK 요구(매년 봄), 연령 등급 설문.
 - 최소 지원 버전을 올릴 수 있는지(오래된 버전의 사용자 비율) — 올리면 contract 마이그레이션을 할 수 있다.
 - Expo(빌드·OTA MAU) · Supabase · Sentry · Claude 사용량과 비용, Apple 개발자 멤버십 갱신일.

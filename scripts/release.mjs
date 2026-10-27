@@ -106,7 +106,8 @@ function eas(args) {
 }
 
 const commitMessage = () => {
-  const sha = (process.env.GITHUB_SHA ?? '').slice(0, 7);
+  // 배포하는 커밋은 워크플로가 DEPLOY_SHA 로 넘긴다(없으면 GITHUB_SHA).
+  const sha = (process.env.DEPLOY_SHA || process.env.GITHUB_SHA || '').slice(0, 7);
   const title = (process.env.COMMIT_TITLE ?? '').split('\n')[0].slice(0, 80);
   return [sha, title].filter(Boolean).join(' ') || 'deploy';
 };
