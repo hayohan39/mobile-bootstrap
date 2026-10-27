@@ -75,7 +75,7 @@ https://github.com/apps/claude → Configure → Repository access → **All rep
 | `CLAUDE_REVIEW_MODEL_HIGH` | | `claude-opus-5-5` | PR 리뷰·Risk (규칙 스캔이 HIGH 이상) |
 
 프로젝트별 변수(새 프로젝트 쪽에서 바꿈): `EAS_PLATFORMS`(`android` → Apple 계정 연결 후 `all`), `SENTRY_PROJECT`,
-`AUTOFIX_MAX_ATTEMPTS`(3), `CLAUDE_REVIEW`·`CLAUDE_REFINE`(`false` 면 끔), `REFINE_MAX_ROUNDS`(1),
+`AUTOFIX_MAX_ATTEMPTS`(3), `CLAUDE_REVIEW`·`CLAUDE_REFINE`(`false` 면 끔), `CLAUDE_REVIEW_EVERY_PUSH`(`true` 면 AI 리뷰를 push 마다 — 기본은 PR 당 1회), `REFINE_MAX_ROUNDS`(1),
 `ROLLOUT_HALT_BELOW`(0.99)·`ROLLOUT_ADVANCE_ABOVE`(0.995)·`ROLLOUT_MIN_SESSIONS`(30).
 
 ## 7. (선택) 클라우드 세션에서 EAS·Supabase 에 직접 접속하기

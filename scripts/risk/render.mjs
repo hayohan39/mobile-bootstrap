@@ -43,6 +43,13 @@ export function previewCell(ci) {
 
 const cell = (text) => String(text ?? '').replace(/\|/g, '\\|').replace(/\n+/g, ' ');
 
+/** AI 리뷰는 PR 당 1회 — 이전 커밋의 리뷰를 이어 쓰고 있으면 그 커밋을 밝힌다. */
+function reusedNote(assessment) {
+  const at = assessment.reviewSha;
+  if (!at || at === assessment.sha) return '';
+  return ` — \`${at.slice(0, 7)}\` 기준(PR 당 1회). 이후 커밋은 규칙 스캔만 · 다시 보려면 \`ai-reviewed\` 라벨을 떼고 push`;
+}
+
 function verdictText(assessment) {
   if (!assessment.review) return '🤖 AI 리뷰 없음';
   return assessment.review.verdict === 'approve' ? '✅ 리뷰 통과' : '✋ 리뷰: 수정 필요';
@@ -96,7 +103,7 @@ export function renderSummary({ assessment, checks, ci, previous = null, repoUrl
   L.push(`| preview (웹·OTA) | ${previewCell(ci)} |`);
   if (ci.e2e && ci.e2e !== 'skipped' && ci.e2e !== 'missing') L.push(`| e2e (Android 에뮬레이터) | ${ciIcon(ci.e2e)} |`);
   if (ci.autofix && ci.autofix !== 'skipped' && ci.autofix !== 'missing') L.push(`| auto-fix | ${ciIcon(ci.autofix)} |`);
-  L.push(`| AI 리뷰 | ${a.review ? verdictText(a) : '건너뜀 (CI 실패·비활성·장애) — 규칙 기반 점수만'} |`);
+  L.push(`| AI 리뷰 | ${a.review ? `${verdictText(a)}${reusedNote(a)}` : '건너뜀 (CI 실패·비활성·장애) — 규칙 기반 점수만'} |`);
 
   // --- merge 전 확인 (막지 않는다 — merge 는 사람이 판단한다)
   if (checks.requirements.length || checks.reasons.length) {
