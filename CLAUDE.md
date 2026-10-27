@@ -120,7 +120,7 @@ PR 생성/push ─► ci.yml
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
                  (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀)
 CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 (merge 를 막지 않음)
-                 (AI 리뷰는 PR 당 1회 — `ai-reviewed` 라벨. 이후 push 는 규칙 스캔만 새로 하고 AI 평가를 이어 씀)
+                 (AI 리뷰는 통과할 때까지, 통과 뒤에는 PR 당 1회 — `ai-reviewed` 라벨. 이후 push 는 규칙 스캔만 새로 하고 AI 평가를 이어 씀)
 PR 코멘트 @claude ─► claude-mention.yml  지시대로 수정
 merge ─► deploy.yml (= 스테이징)  DB 마이그레이션(프로덕션 Supabase) → Edge Functions →
                                   fingerprint 같은 스테이징 빌드가 있으면 OTA(staging) / 없으면 스테이징 빌드(내부 배포)
