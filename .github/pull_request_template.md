@@ -5,6 +5,7 @@
 ## 어떻게 확인했나
 
 - [ ] `npm run check` (lint · typecheck · test · 웹 export · 웹 스모크) 통과
+- [ ] 품질 점검(`.github/review/quality.md`): <!-- 고친 것 / 남긴 것 한 줄 -->
 - [ ] 바뀐 동작을 검증하는 테스트: <!-- 파일과 케이스 (DB 변경이면 test/db 의 RLS 케이스) -->
 - [ ] (화면 변경 시) 웹 프리뷰 / 개발 빌드에서 확인할 곳:
 - [ ] (네이티브 기능 — 권한·카메라·푸시·결제 등) 폰에서 확인할 것:
@@ -16,6 +17,12 @@
      - 새 환경변수: 이름·용도·발급처 (EAS 환경변수 / Supabase secret 에 merge 전에 설정 필요)
      - 스토어: 새 권한·SDK → 개인정보 라벨 / Data safety / privacy manifest 갱신 필요 여부
      없으면 "없음". -->
+
+## 예상 Risk
+
+<!-- 작성자의 자기 평가(.github/risk/rubric.md). 등급 · 규칙 스캔 최저치 · 가장 큰 factor 두세 개와 이유.
+     예: "MEDIUM (스캔 최저 30) — Compatibility: 새 컬럼 추가만, 구버전 앱은 무시 / Testing: RLS 케이스 추가"
+     최종 점수는 CI 뒤 AI 리뷰가 낸다. -->
 
 ## 롤백 계획
 

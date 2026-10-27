@@ -32,13 +32,16 @@ merge 는 main 에 쌓기만 한다. **스테이징(내부 테스트 채널) 배
    결정이면 구현 전에 먼저 묻는다(아래 "인프라 결정", "스토어 규정"). 그 외에는 합리적으로 판단해 진행하고 PR 에 적는다.
 3. 구현한다. **한 PR 에 한 목적.** 무관한 리팩터링은 하지 않는다. **네이티브 변경**(아래)은 JS 변경과 섞지 않고
    따로 작은 PR 로 낸다 — 네이티브 변경은 새 빌드·스토어 심사가 필요하고 되돌릴 수 없어서 Risk 가 높다.
-4. **push 전에 diff 를 스스로 다듬는다**: `.github/review/quality.md` 기준(덧붙임·재사용·단순화·일관성·빈틈)으로
-   `git diff origin/main...HEAD` 를 한 번 훑는다. 세션에 `/simplify` 스킬이 있으면 그걸 써도 된다.
+4. **push 전에 diff 를 스스로 다듬는다** — CI 에는 품질 리뷰가 없어서 이 단계가 유일한 품질 점검이다.
+   `.github/review/quality.md` 를 읽고 그 기준(덧붙임·재사용·단순화·일관성·빈틈)으로 `git diff origin/main...HEAD` 를 훑어
+   바로 고칠 것은 고치고, 남길 것은 PR 본문에 적는다. 세션에 `/simplify` 스킬이 있으면 먼저 돌리고 표로 한 번 더 본다.
    그리고 **반드시** `npm run check` (lint → typecheck → test → 웹 export → 웹 스모크) 를 통과시킨다.
    DB 를 건드렸으면 `npm test` 가 로컬 Postgres 에 마이그레이션을 적용하고 RLS 테스트까지 돈다(아래 참고).
-5. **예상 Risk 를 먼저 본다**: `node scripts/risk/cli.mjs scan --base origin/main --head HEAD`
-   (규칙 기반 최저치. 최종 점수는 CI 뒤 AI 리뷰가 더한다.) HIGH 이상이면 PR 본문 **롤백 계획**,
-   VERY HIGH 이상이면 **배포 후 확인**까지 구체적으로 쓴다.
+5. **예상 Risk 를 스스로 매긴다**: `node scripts/risk/cli.mjs scan --base origin/main --head HEAD`(규칙 기반 최저치)를 돌리고,
+   `.github/risk/rubric.md` 의 factor 로 직접 평가해 PR 본문 **예상 Risk** 에 등급과 가장 큰 factor 두세 개를 쓴다.
+   HIGH 이상이면 **롤백 계획**, VERY HIGH 이상이면 **배포 후 확인**까지 구체적으로 쓴다.
+   최종 점수는 CI 뒤 독립 AI 리뷰(PR 당 1회)가 낸다 — 작성자의 자기 평가는 맹점을 공유하므로 대신하지 못한다.
+   AI 리뷰가 더 높게 매기면 그 근거를 보고 롤백 계획·테스트를 보강한다.
 6. 커밋 메시지는 Conventional Commits, 제목은 한국어 가능: `feat: 단어장 화면 추가`.
 7. push 후 **PR 을 만든다**. 본문은 `.github/pull_request_template.md` 형식으로 파일에 쓰고:
    `node scripts/gh.mjs pr-create --title "feat: ..." --body-file /tmp/pr.md`
@@ -50,7 +53,7 @@ merge 는 main 에 쌓기만 한다. **스테이징(내부 테스트 채널) 배
 9. **merge 하지 않는다.** 사용자가 요청해도 "PR 에서 merge 버튼을 눌러 주세요" 라고 안내한다.
 
 PR 이 이미 열려 있는 브랜치에서 추가 요청을 받으면 같은 브랜치에 커밋을 더한다.
-그 전에 `git pull origin <브랜치>` — CI 가 `[claude-refine]`·`[claude-autofix]` 커밋을 더했을 수 있다.
+그 전에 `git pull origin <브랜치>` — CI 가 `[claude-autofix]` 커밋을 더했을 수 있다.
 
 ### 네이티브 변경 vs JS 변경 (가장 중요한 구분)
 
@@ -72,7 +75,7 @@ PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네
 - 기준은 `.github/risk/rubric.md`. Risk 는 품질 점수가 아니라 "사용자 폰에서 잘못되면 얼마나 아픈가" 다.
 - **점수를 낮추려고 위험을 숨기지 않는다.** 스캐너를 피하려고 코드를 쪼개거나, 형식적인 테스트를 추가하거나,
   확인하지 않은 주장을 PR 본문에 쓰지 않는다. 위험은 작게 나누기, expand/contract, 테스트, 원격 킬스위치로 줄인다.
-- `risk:*`·`ai-reviewed`·`quality-reviewed` 라벨, PR 리뷰 상태는 **절대 건드리지 않는다**(리뷰를 건너뛰게 만드는 라벨이다). 위험을 받아들이고 merge 하는 것은 사람의 몫이다.
+- `risk:*`·`ai-reviewed` 라벨, PR 리뷰 상태는 **절대 건드리지 않는다**(리뷰를 건너뛰게 만드는 라벨이다). 위험을 받아들이고 merge 하는 것은 사람의 몫이다.
 - `.github/risk/*`, `scripts/risk/*`, `.github/workflows/pr-review.yml` 을 바꾸는 것은
   평가 기준 자체를 바꾸는 일이다. 사용자가 명시적으로 요청했을 때만 하고, 별도 PR 로 한다.
 
@@ -127,8 +130,6 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 PR 생성/push ─► ci.yml
                  ├ test     마이그레이션 append-only · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor
                  ├ preview  fingerprint 비교(네이티브 변경?) · EAS Update(branch pr-<n>) · 웹 프리뷰 → PR 코멘트
-                 ├ e2e      (`e2e` 라벨이 있을 때만) Android 빌드 → 에뮬레이터 Maestro — 같은 PR·같은 네이티브 상태로 통과했으면 다시 안 돎
-                 ├ refine   통과하면 Claude 품질 리뷰 → 작은 정리는 [claude-refine] 커밋 (PR 당 1회 — `quality-reviewed` 라벨)
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
                  (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀)
 CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 (merge 를 막지 않음)
@@ -148,12 +149,12 @@ PR 닫힘 ─► preview-cleanup.yml  EAS Update 의 pr-<n> 브랜치 정리
 
 - 워크플로를 고칠 때는 그 이유를 PR 에 적는다. 시크릿 값을 로그에 찍지 않는다.
 - **Actions 시간은 계정의 모든 비공개 리포지토리가 나눠 쓴다**(GitHub Free 월 2,000분 · Pro 3,000분, 넘으면 예산만큼 과금 —
-  예산이 $0 이면 그 달은 모든 워크플로가 멈춘다). JS push 한 번에 약 10분, e2e(`e2e` 라벨)는 20~60분이다.
-  PR 의 e2e 는 기본으로 돌지 않는다 — 네이티브가 바뀌었으면 스테이징을 올릴 때 한 번 돈다(PR 여러 개를 모아 한 번).
+  예산이 $0 이면 그 달은 모든 워크플로가 멈춘다). JS push 한 번에 약 10분, e2e(Android 에뮬레이터)는 20~60분이다.
+  e2e 는 PR 에서 돌지 않는다 — 네이티브가 바뀌었으면 스테이징을 올릴 때 한 번 돈다(PR 여러 개를 모아 한 번).
   merge 마다 스테이징을 올리지 않는 것도 같은 이유다: 검사·e2e·빌드를 스테이징 1번에 1번만 쓴다.
   그래서: `npm run check` 를 통과한 뒤 커밋을 모아 한 번에 push 한다(작은 수정마다 push 하지 않는다).
   위의 건너뛰기 규칙을 깨는 변경(새 워크플로, 새 schedule, 매 push 마다 도는 job)은
-  PR 본문에 예상 사용 시간을 쓴다. 품질 리뷰(refine) 커밋도 CI 를 한 번 더 돌린다 — 바쁜 달에는 변수 `CLAUDE_REFINE=false` 로 끌 수 있다.
+  PR 본문에 예상 사용 시간을 쓴다. 품질 점검을 CI 가 아니라 push 전 세션에서 하는 것도 같은 이유다(정리 커밋이 CI 를 한 번 더 돌린다).
 - 스테이징 앱과 프로덕션 앱은 **같은 Supabase DB** 를 쓴다. 그래서 DB 변경은 스테이징을 올리는 순간 프로덕션 사용자에게도 적용된다
   — 아래 expand → contract 규칙이 이를 안전하게 한다.
 
@@ -170,7 +171,7 @@ PR 닫힘 ─► preview-cleanup.yml  EAS Update 의 pr-<n> 브랜치 정리
   `delete-account`), 푸시 토큰 `src/lib/push.ts`, 원격 설정(킬스위치·최소 지원 버전·점검) `src/lib/app-config.ts` + `AppGate`,
   정책 페이지 `/privacy`·`/terms`·`/delete-account`(웹 export 로 공개 URL). 공용 컴포넌트 `Screen`·`Text`·`Button`·`TextField`.
 - 테스트: vitest(`test/**` — 순수 로직·스크립트·DB/RLS), jest-expo + Testing Library(`src/**/*.test.tsx` — 화면),
-  Playwright(`e2e/web` — 웹 export 스모크), Maestro(`.maestro/` — CI 의 Android 에뮬레이터).
+  Playwright(`e2e/web` — 웹 export 스모크), Maestro(`.maestro/` — 스테이징을 올릴 때 Android 에뮬레이터).
 - Node 22 (`.nvmrc`). 확정된 인프라와 이유는 `docs/decisions.md`.
 
 ## 데이터베이스 규칙 (Supabase)

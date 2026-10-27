@@ -44,7 +44,7 @@
 **PR 종합 코멘트가 안 붙음 / `pr-watch` 가 "PR 리뷰" 대기** — production-bootstrap 과 같다: `pr-review.yml` 은 main 에 있는 버전만 돈다,
 CI 가 취소됐으면 다음 커밋에서 붙는다, Actions → PR review → Re-run.
 
-**품질 리뷰·auto-fix 가 안 돎** — `CLAUDE_CODE_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`, `no-refine`/`no-autofix` 라벨,
+**auto-fix 가 안 돎** — `CLAUDE_CODE_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`, `no-autofix` 라벨,
 `ci.yml` 을 바꾼 PR(main 과 달라서 App 토큰 검사에 걸림 — merge 후 다음 PR 부터).
 
 **Claude 커밋에 체크가 안 붙음 / `@claude` 가 `could not read Username` / 로그에 `Workflow initiated by non-human actor`** —

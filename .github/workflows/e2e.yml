@@ -1,0 +1,38 @@
+name: e2e (manual)
+
+# 아무 브랜치에서나 Android 에뮬레이터 e2e 만 돌린다 — 수동 실행 전용(자동으로는 돌지 않아 평소 0분).
+#   node scripts/gh.mjs dispatch e2e.yml --ref <브랜치>
+# 쓰는 곳: merge 전에 위험한 네이티브 변경을 기기에서 미리 확인할 때, 그리고 템플릿 리포지토리의 SDK 업그레이드 PR
+# (템플릿은 스테이징이 없다). 평소의 e2e 는 스테이징을 올릴 때(deploy.yml) 네이티브가 바뀌었으면 돈다.
+# 결과는 PR 체크에 붙지 않는다(실행 결과·실패 시 maestro-report 아티팩트로 본다). 빌드+에뮬레이터 20~60분.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - uses: ./.github/actions/android-e2e

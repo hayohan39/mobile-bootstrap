@@ -6,7 +6,7 @@
 //       GitHub 시크릿 SUPABASE_DB_URL, 변수 SUPABASE_PROJECT_REF·EAS_PLATFORMS →
 //       Auth 의 리디렉트 허용 주소(<scheme>://) → $GITHUB_OUTPUT 에 supabase_url, publishable_key
 //   node scripts/provision.mjs --repo owner/name --protect
-//       라벨 + main 브랜치 규칙(ruleset): PR 필수, 필수 체크 test, force push·삭제 금지.
+//       라벨(쓰지 않는 기본 라벨은 지움) + main 브랜치 규칙(ruleset): PR 필수, 필수 체크 test, force push·삭제 금지.
 //       이미 있는 규칙은 갱신한다(예전 프로젝트의 필수 체크 risk-gate 도 이걸로 빠진다).
 //       초기화 push 뒤에 실행한다(규칙이 먼저 걸리면 초기화 커밋을 main 에 push 할 수 없다).
 //
@@ -170,8 +170,13 @@ const LABELS = [
   ['risk:very-high', 'cf222e', 'Risk Score VERY HIGH'],
   ['risk:critical', '6e0b0b', 'Risk Score CRITICAL'],
   ['no-autofix', 'bfdadc', 'CI 실패 시 Claude auto-fix 끄기'],
-  ['no-refine', 'bfdadc', 'CI 뒤 Claude 품질 리뷰(자동 정리) 끄기'],
-  ['e2e', '1d76db', 'JS 변경도 Android 에뮬레이터 e2e 를 돌린다(다음 push 부터)'],
+];
+// 파이프라인이 쓰지 않는 라벨: GitHub 기본 라벨, Dependabot 이 만든 것, 예전 파이프라인의 것(merge 게이트·PR e2e·CI 품질 리뷰).
+// ai-reviewed 는 PR 리뷰가 필요할 때 만든다.
+const UNUSED_LABELS = [
+  'bug', 'documentation', 'duplicate', 'enhancement', 'good first issue', 'help wanted', 'invalid', 'question',
+  'wontfix', 'accessibility', 'dependencies', 'javascript', 'github_actions',
+  'risk-accepted', 'e2e', 'no-refine', 'quality-reviewed',
 ];
 
 function ensureLabels(repo) {
@@ -180,6 +185,14 @@ function ensureLabels(repo) {
       gh(['label', 'create', name, '-R', repo, '--color', color, '--description', description, '--force']);
     } catch {
       console.log(`  ::warning::라벨 ${name} 생성 실패`);
+    }
+  }
+  for (const name of UNUSED_LABELS) {
+    try {
+      execFileSync('gh', ['label', 'delete', name, '-R', repo, '--yes'], { stdio: 'ignore' });
+      console.log(`  라벨 ${name} 삭제`);
+    } catch {
+      // 없는 라벨
     }
   }
 }

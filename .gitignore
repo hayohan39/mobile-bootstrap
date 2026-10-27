@@ -47,4 +47,3 @@ yarn-error.*
 # CI 작업 디렉터리
 .review/
 /pr/
-.refine/

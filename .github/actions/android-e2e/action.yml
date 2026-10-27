@@ -1,7 +1,7 @@
 name: Android e2e
 description: >-
   Android release APK 를 러너에서 빌드하고 에뮬레이터에서 Maestro 흐름(.maestro/)을 돌린다 — 빌드가 되고, 켜자마자 죽지 않는지.
-  ci.yml 의 e2e job(PR 에 `e2e` 라벨)과 deploy.yml 의 스테이징(네이티브가 바뀌었을 때)이 같이 쓴다.
+  deploy.yml 의 스테이징이 쓴다(네이티브가 바뀌었을 때, 또는 e2e=always).
   부르는 쪽이 checkout · setup-node · npm ci 를 먼저 한다. EAS 를 쓰지 않는다(EAS 무료 빌드 한도 보존).
 runs:
   using: composite
