@@ -121,7 +121,7 @@ PR 생성/push ─► ci.yml
              ─► risk-gate.yml  새 커밋이면 risk-gate 를 "대기" 로
 CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 · risk-gate
 PR 코멘트 @claude ─► claude-mention.yml  지시대로 수정
-merge ─► ci.yml 의 test (main 의 merge 결과물을 한 번 더 — 브랜치 보호가 "최신 main 포함" 을 요구하지 않아서)
+merge ─► ci.yml 의 test (main 의 merge 결과물을 한 번 더, 항상 전체 — 브랜치 보호가 "최신 main 포함" 을 요구하지 않아서)
       ─► 통과하면 deploy.yml (= 스테이징)  DB 마이그레이션(프로덕션 Supabase) → Edge Functions →
                                   fingerprint 같은 스테이징 빌드가 있으면 OTA(staging) / 없으면 스테이징 빌드(내부 배포)
                                   (문서만 바뀐 merge 는 배포하지 않음. test 가 실패하면 배포하지 않음)

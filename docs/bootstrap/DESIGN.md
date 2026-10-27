@@ -114,7 +114,7 @@ GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다�
 | 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | `e2e` 라벨이 있을 때만 돈다(네이티브 변경의 기본 검증은 merge 후 스테이징 빌드). 라벨이 있어도 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시) |
 | 품질 리뷰(refine)가 push 마다 + 정리 커밋이 CI 를 한 번 더 | PR 당 1회: 시작할 때 `quality-reviewed` 라벨을 붙이고, 라벨이 있으면 job 이 건너뛴다(러너도 뜨지 않음) |
 | 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·품질 리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정(이름 바꾸기는 옛 경로까지) → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀. deploy 는 **마지막 성공 배포** 이후가 문서뿐일 때만 건너뜀 — 앞선 배포가 실패·취소됐으면 그 코드까지 배포한다 |
-| (일부러 쓰는 시간) merge 후 main 에서 test 를 다시 | 브랜치 보호가 "최신 main 포함"(strict)을 요구하지 않아 merge 결과물은 PR 에서 검사되지 않는다. main push 에서는 test 만(문서만이면 스텝 건너뜀) 돌고, deploy.yml 은 그 test 가 통과한 뒤 `workflow_run` 으로 시작한다. strict 를 켜면 PR 마다 "Update branch" 로 CI 전체가 한 번 더 돌아 더 비싸다 |
+| (일부러 쓰는 시간) merge 후 main 에서 test 를 다시 | 브랜치 보호가 "최신 main 포함"(strict)을 요구하지 않아 merge 결과물은 PR 에서 검사되지 않는다. main push 에서는 test 만(항상 전체 — 앞선 merge 의 CI 가 취소됐을 수 있어서) 돌고, deploy.yml 은 그 test 가 통과한 뒤 `workflow_run` 으로 시작한다. strict 를 켜면 PR 마다 "Update branch" 로 CI 전체가 한 번 더 돌아 더 비싸다 |
 | Dependabot 이 쉬는 리포에도 매주 PR → CI·리뷰 | Dependabot 버전 업데이트를 쓰지 않는다. 의존성은 세션에서 요청해 올린다. 보안 알림(Dependabot alerts)은 리포 설정에서 켠다(PR·Actions 없음) |
 | 출시 전·롤아웃 100% 뒤에도 매일 도는 rollout-monitor(실행마다 npm ci + EAS CLI) | 할 일이 없으면 스스로 disable, release.yml(kind=ota·rollout)이 enable. `actions: write` 는 그 한 줄짜리 job 에만(EXPO_TOKEN 을 쓰는 job 에는 주지 않는다) |
 | job 이 멈추면 기본 한도 6시간 과금 | 모든 job 에 timeout(평소 시간의 2~3배): test 20분 · preview 15분 · refine 20분 · autofix 25분 · @claude 45분 · 1분짜리 job 5~10분 |
