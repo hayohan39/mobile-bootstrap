@@ -7,7 +7,7 @@ name: New project
 #   3. 플레이스홀더·앱 식별자(bundle id) 채우기 + 템플릿 전용 파일 제거(scripts/init-project.mjs)
 #   4. EAS 프로젝트 연결(eas init) + OTA 주소 + 앱 공개 환경변수(EXPO_PUBLIC_SUPABASE_*) → push
 #      → 새 리포지토리의 deploy.yml 이 첫 스테이징 빌드(Android APK)를 시작한다
-#   5. main 보호 규칙(PR 필수, 필수 체크 test·risk-gate) + 라벨
+#   5. main 보호 규칙(PR 필수, 필수 체크 test) + 라벨
 #
 # Claude 클라우드 세션은 GitHub 프록시 때문에 리포지토리를 직접 만들 수 없다. 이 리포지토리에 attach 된
 # 세션에서 dispatch 한다:
@@ -248,7 +248,7 @@ jobs:
             echo "| Supabase 프로젝트 | ${SUPABASE:-미실행} (DB URL 시크릿: ${DB_URL_SET:-false}) |"
             echo "| 초기화 커밋 | ${INIT:-미실행} |"
             echo "| EAS 프로젝트 연결 | ${EAS:-미실행} |"
-            echo "| main 보호 (test · risk-gate 필수) | ${PROTECT:-미실행} |"
+            echo "| main 보호 (test 필수) | ${PROTECT:-미실행} |"
             echo ""
             if [ "$SUPABASE" != "success" ]; then
               echo "⚠️ Supabase 프로비저닝이 끝나지 않았습니다. 로그를 확인하고 원인을 고친 뒤 **같은 이름으로 다시 실행**하세요."

@@ -11,7 +11,7 @@ name: CI
 #   autofix      위 중 하나라도 실패하면 Claude 가 로그를 읽고 고쳐서 push
 #
 # 이 실행이 끝나면 pr-review.yml(workflow_run) 이 main 의 코드로 AI 리뷰 + Risk Score 를 내고
-# PR 종합 코멘트와 risk-gate 상태를 갱신한다. 리뷰/게이트를 이 파일에 두지 않는 이유:
+# PR 종합 코멘트를 갱신한다(merge 를 막지는 않는다). 리뷰를 이 파일에 두지 않는 이유:
 # 이 파일은 PR 의 버전이 실행되므로, PR 이 자기 평가 방식을 바꿀 수 있게 된다.
 #
 # Actions 시간 아끼기(무료 사용량은 계정의 모든 비공개 리포지토리가 나눠 쓴다):
@@ -63,7 +63,7 @@ jobs:
         run: node scripts/ci-changes.mjs --base "$BASE"
 
       # code=false(문서만) → 아무 검사도 하지 않는다.
-      # draft 는 가볍게 돌리지 않는다: risk-gate 가 ready_for_review 에 반응하지 않아, draft 기준의 평가가 남은 채 merge 될 수 있다.
+      # draft 도 같은 검사를 돈다(Ready for review 때 CI·리뷰가 다시 돈다).
       - name: Scope
         id: scope
         env:
@@ -773,7 +773,7 @@ jobs:
             - RLS 테스트가 실패하면 정책을 넓혀서 통과시키지 않는다. 정책이 의도대로 막는지가 테스트의 목적이다.
             - `.github/`(워크플로·리스크 규칙)와 `scripts/risk/` 는 고치지 않는다. 원인이 거기 있으면
               push 하지 말고 코멘트로 알린다.
-            - 라벨(특히 `risk-accepted`), PR 본문, 리뷰 상태는 건드리지 않는다.
+            - 라벨(특히 `risk:*`), PR 본문, 리뷰 상태는 건드리지 않는다.
             - EAS·Supabase 인증·한도·장애처럼 코드로 고칠 수 없는 원인이거나, 원인이 확실하지 않거나,
               제품 동작을 바꿔야만 고쳐지는 경우에는 **push 하지 말고** 무엇이 막혔는지 코멘트만 남긴다.
 

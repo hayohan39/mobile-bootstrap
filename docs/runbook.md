@@ -28,7 +28,7 @@ PR merge(쌓기) ──► 스테이징 (deploy.yml, "스테이징 올려줘") �
 - [ ] **Supabase Auth**: Authentication → URL Configuration 의 Site URL·Redirect URL 에 앱 scheme(`<scheme>://`)과
   웹 주소를 넣는다. 이메일 발송 한도가 낮으므로 출시 전에 SMTP(예: Resend)를 연결한다.
 - [ ] **스토어 계정과 첫 출시**: `docs/STORE-LAUNCH.md` 를 처음부터 따른다(계정 가입, Play 비공개 테스트 14일 등).
-- [ ] **GitHub**: Settings → Rules 에 `main protection`(PR 필수, 필수 체크 `test` · `risk-gate`)이 있는지.
+- [ ] **GitHub**: Settings → Rules 에 `main protection`(PR 필수, 필수 체크 `test`)이 있는지.
 
 ## 출시 ("출시해줘")
 
