@@ -9,7 +9,7 @@ CI·AI 리뷰·Risk Score 를 보고 사람이 merge — 를 모바일에 맞게
 | 앱 | Expo SDK 57 (React Native 0.86) + Expo Router + TypeScript — 한 코드로 Android·iOS(·웹 프리뷰) |
 | 빌드·제출·OTA | EAS Build / Submit / Update (iOS 는 Expo 의 macOS 에서 빌드) |
 | 백엔드 | Supabase — Postgres + RLS, Auth, Storage, Realtime, Edge Functions |
-| 품질·운영 | GitHub Actions + Claude(auto-fix · 품질 리뷰 · AI 리뷰 + Risk Score · merge 게이트), Sentry, 단계적 롤아웃·롤백 |
+| 품질·운영 | GitHub Actions + Claude(auto-fix · 품질 리뷰 · AI 리뷰 + Risk Score), Sentry, 단계적 롤아웃·롤백 |
 
 ## 이 템플릿으로 만든 프로젝트의 흐름
 
@@ -36,7 +36,7 @@ CI·AI 리뷰·Risk Score 를 보고 사람이 merge — 를 모바일에 맞게
 
 - `src/` — 앱 골격(Expo Router), Supabase 클라이언트, Sentry, 앱 정보(채널·OTA 업데이트·커밋)
 - `supabase/` — 마이그레이션(Supabase CLI 형식), Edge Functions, 세션용 auth shim
-- `.github/workflows/` — ci · pr-review · risk-gate · claude-mention · deploy(스테이징) · release · rollout-monitor · rollback · preview-cleanup · new-project
+- `.github/workflows/` — ci · pr-review · claude-mention · deploy(스테이징) · release · rollout-monitor · rollback · preview-cleanup · new-project
 - `scripts/` — `gh.mjs`(세션용 GitHub REST), `risk/`(Risk Score), `fingerprint.mjs`(네이티브 변경 판정), `release.mjs`(EAS 배포·출시·롤백), `db.mjs`(로컬 마이그레이션)
 - `docs/` — [runbook](docs/runbook.md)(출시·장애), [STORE-LAUNCH](docs/STORE-LAUNCH.md)(스토어 규정·첫 출시), [recipes](docs/recipes/)(커뮤니티 신고·차단, 결제·광고, 게임, 위치, 오프라인), [bootstrap](docs/bootstrap/)(설계·스택·설정·유지보수)
 

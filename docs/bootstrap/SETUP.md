@@ -90,7 +90,7 @@ https://github.com/apps/claude → Configure → Repository access → **All rep
 
 새 프로젝트의 Settings → Rules → Rulesets → New branch ruleset:
 Target: Default branch, Enforcement: Active, Restrict deletions, Block force pushes,
-Require a pull request (승인 수 0), Require status checks: `test`, `risk-gate`.
+Require a pull request (승인 수 0), Require status checks: `test`.
 
 ## 9. 확인
 

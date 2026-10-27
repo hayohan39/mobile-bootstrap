@@ -2,7 +2,8 @@
 
 mobile-bootstrap 이 왜 이렇게 생겼는지. production-bootstrap(웹)의 [DESIGN.md](https://github.com/hayohan39/production-bootstrap/blob/main/docs/bootstrap/DESIGN.md)
 에서 그대로 가져온 결정(클라우드 세션의 GitHub 프록시, REST 헬퍼, auto-fix 토큰, 품질 리뷰, Risk Score 의 두 겹 평가와
-main 의 코드로 평가하기, risk-gate)은 반복하지 않고 **모바일이라서 달라진 것**만 쓴다.
+main 의 코드로 평가하기)은 반복하지 않고 **모바일이라서 달라진 것**만 쓴다.
+merge 게이트(risk-gate)는 2026-10 에 없앴다 — 필수 체크는 `test` 하나, Risk 는 PR 종합 코멘트로만 보여 준다.
 
 ## 1. 세션은 Linux 이고 기기가 없다 → Expo + EAS
 

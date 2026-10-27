@@ -41,7 +41,7 @@
 **`e2e` 실패** — 업로드된 `maestro-report` 아티팩트의 스크린샷을 본다. 앱이 뜨자마자 죽으면 대개 네이티브 설정(권한·플러그인)
 또는 시작 경로(`_layout.tsx`) 예외다. 에뮬레이터 부팅 타임아웃은 Re-run.
 
-**PR 종합 코멘트가 안 붙음 / `risk-gate` 대기** — production-bootstrap 과 같다: `pr-review.yml` 은 main 에 있는 버전만 돈다,
+**PR 종합 코멘트가 안 붙음 / `pr-watch` 가 "PR 리뷰" 대기** — production-bootstrap 과 같다: `pr-review.yml` 은 main 에 있는 버전만 돈다,
 CI 가 취소됐으면 다음 커밋에서 붙는다, Actions → PR review → Re-run.
 
 **품질 리뷰·auto-fix 가 안 돎** — `CLAUDE_CODE_OAUTH_TOKEN`/`ANTHROPIC_API_KEY`, `no-refine`/`no-autofix` 라벨,

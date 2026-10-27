@@ -18,7 +18,7 @@ merge 는 **스테이징(내부 테스트 채널) 배포**이고, 사용자에�
 
 | 누가 | 무엇을 |
 | --- | --- |
-| 사용자 | 요청 · PR 판단 · **merge** · 폰에서 스테이징 확인 · **출시 지시** · CRITICAL 의 `risk-accepted` · 스토어 콘솔 작업(심사 제출 버튼, 스토어 정보, 계정·결제·키) |
+| 사용자 | 요청 · PR 판단(CRITICAL 포함) · **merge** · 폰에서 스테이징 확인 · **출시 지시** · 스토어 콘솔 작업(심사 제출 버튼, 스토어 정보, 계정·결제·키) |
 | Claude (세션) | 브랜치 → 구현 → 로컬 검증 → 커밋 → push → **PR 생성** → CI·리뷰·Risk 보고 → 지적 수정 → (요청 시) release 워크플로 실행·결과 보고 |
 | GitHub Actions | CI · auto-fix · PR 프리뷰(웹 + OTA) · AI 리뷰 + Risk Score · merge 후 DB 마이그레이션 → 스테이징 OTA 또는 빌드 · 출시 · 롤아웃 감시 · 롤백 |
 | EAS (Expo) | 클라우드 빌드(iOS 포함 — Mac 불필요) · 서명 키 보관 · 스토어 제출 · OTA 업데이트 배포 |
@@ -42,8 +42,9 @@ merge 는 **스테이징(내부 테스트 채널) 배포**이고, 사용자에�
 7. push 후 **PR 을 만든다**. 본문은 `.github/pull_request_template.md` 형식으로 파일에 쓰고:
    `node scripts/gh.mjs pr-create --title "feat: ..." --body-file /tmp/pr.md`
    빈 섹션을 남기지 않는다. 사용자는 휴대폰으로 본다 — 첫 줄에서 무엇이 바뀌는지 알 수 있게.
-8. `node scripts/gh.mjs pr-watch` 로 CI 와 리뷰(risk-gate)가 끝날 때까지 기다린 뒤 두세 줄로 보고한다:
-   CI 결과 · 리뷰 판정과 주요 지적 · **Risk 등급/게이트** · **프리뷰(웹 링크, OTA 여부 또는 "새 빌드 필요")**.
+8. `node scripts/gh.mjs pr-watch` 로 CI 와 PR 리뷰(종합 코멘트)가 끝날 때까지 기다린 뒤 두세 줄로 보고한다:
+   CI 결과 · 리뷰 판정과 주요 지적 · **Risk 등급과 빠진 확인 사항** · **프리뷰(웹 링크, OTA 여부 또는 "새 빌드 필요")**.
+   merge 를 막는 게이트는 없다(필수 체크는 `test` 뿐). HIGH 이상이면 사용자가 무엇을 보고 merge 할지 분명히 적는다.
    - 리뷰 finding(blocker/major)은 같은 브랜치에서 고쳐 push 한다. 고치지 않을 것은 이유를 PR 에 쓴다.
 9. **merge 하지 않는다.** 사용자가 요청해도 "PR 에서 merge 버튼을 눌러 주세요" 라고 안내한다.
 
@@ -70,8 +71,8 @@ PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네
 - 기준은 `.github/risk/rubric.md`. Risk 는 품질 점수가 아니라 "사용자 폰에서 잘못되면 얼마나 아픈가" 다.
 - **점수를 낮추려고 위험을 숨기지 않는다.** 스캐너를 피하려고 코드를 쪼개거나, 형식적인 테스트를 추가하거나,
   확인하지 않은 주장을 PR 본문에 쓰지 않는다. 위험은 작게 나누기, expand/contract, 테스트, 원격 킬스위치로 줄인다.
-- `risk-accepted` 라벨, `risk:*` 라벨, PR 리뷰 상태는 **절대 건드리지 않는다.** 수락은 사람의 몫이다.
-- `.github/risk/*`, `scripts/risk/*`, `.github/workflows/pr-review.yml`, `risk-gate.yml` 을 바꾸는 것은
+- `risk:*` 라벨, PR 리뷰 상태는 **절대 건드리지 않는다.** 위험을 받아들이고 merge 하는 것은 사람의 몫이다.
+- `.github/risk/*`, `scripts/risk/*`, `.github/workflows/pr-review.yml` 을 바꾸는 것은
   평가 기준 자체를 바꾸는 일이다. 사용자가 명시적으로 요청했을 때만 하고, 별도 PR 로 한다.
 
 > **GitHub CLI 주의**: 클라우드 세션의 GitHub 프록시는 GraphQL 을 막는다. `gh pr create`,
@@ -105,7 +106,7 @@ PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네
 
 ## 개발 상황을 물으면
 
-`project-status` 스킬을 따른다. 열린 PR 과 각 CI·리뷰·**Risk/게이트**·네이티브 여부, 스테이징·프로덕션에 나간 것
+`project-status` 스킬을 따른다. 열린 PR 과 각 CI·리뷰·**Risk**·네이티브 여부, 스테이징·프로덕션에 나간 것
 (OTA 업데이트·빌드·롤아웃 %), 스토어 심사 상태(알 수 있으면), `docs/decisions.md` 의 미결 항목을 짧게 정리한다.
 
 ## 파이프라인 (건드리기 전에 이해할 것)
@@ -118,8 +119,7 @@ PR 생성/push ─► ci.yml
                  ├ refine   통과하면 Claude 품질 리뷰 → 작은 정리는 [claude-refine] 커밋 (push 당 1회)
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
                  (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀)
-             ─► risk-gate.yml  새 커밋이면 risk-gate 를 "대기" 로
-CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 · risk-gate
+CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 (merge 를 막지 않음)
 PR 코멘트 @claude ─► claude-mention.yml  지시대로 수정
 merge ─► deploy.yml (= 스테이징)  DB 마이그레이션(프로덕션 Supabase) → Edge Functions →
                                   fingerprint 같은 스테이징 빌드가 있으면 OTA(staging) / 없으면 스테이징 빌드(내부 배포)

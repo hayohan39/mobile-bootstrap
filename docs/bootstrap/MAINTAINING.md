@@ -27,7 +27,7 @@
 - `ci.yml` 의 `test`·`fingerprint`·`e2e`(네이티브 변경 시)는 템플릿에서도 돈다 → 템플릿 앱이 항상 초록인지 확인.
 - `preview`, `deploy.yml`, `release.yml`, `rollback.yml`, `rollout-monitor.yml`, `preview-cleanup.yml` 은
   `github.event.repository.is_template` 으로 건너뛴다.
-- `pr-review.yml` · `risk-gate.yml` 은 템플릿 PR 에서도 돈다. main 에 있는 버전이 실행되므로 이 두 파일이나
+- `pr-review.yml` 은 템플릿 PR 에서도 돈다. main 에 있는 버전이 실행되므로 이 파일이나
   `scripts/risk/` 를 바꾸는 PR 은 **바꾸기 전 규칙**으로 평가된다.
 
 ## Expo SDK 를 올릴 때 (1년에 2~3번)

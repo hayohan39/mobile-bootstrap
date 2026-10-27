@@ -13,12 +13,12 @@
 5. **내가 판단해서 merge** (또는 `@claude <지시>` 로 수정 요청) → **스테이징**: DB 마이그레이션 + 스테이징 앱에 OTA 또는 새 빌드
 6. 폰의 스테이징 앱에서 확인 → 세션에서 **"출시해줘"** → OTA 10%→50→100% 단계적 롤아웃 / 스토어 제출
 
-| Risk | merge 전에 필요한 것 |
+| Risk | merge 전에 볼 것 (PR 종합 코멘트가 알려 준다 — merge 를 막지는 않는다) |
 | --- | --- |
 | 🟢 LOW · 🟡 MEDIUM | — |
 | 🟠 HIGH (네이티브 변경 포함) | PR 본문 "롤백 계획" |
 | 🔴 VERY HIGH | + "배포 후 확인" |
-| ⛔ CRITICAL | + 내가 `risk-accepted` 라벨 (그 커밋에 대해) |
+| ⛔ CRITICAL | + 나눠서 배포할 수 없는지 내가 직접 판단 |
 
 기준: [.github/risk/rubric.md](.github/risk/rubric.md). 진행 상황은 Claude 세션에서 "지금 상황 알려줘".
 
