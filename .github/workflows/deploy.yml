@@ -47,7 +47,8 @@ env:
 
 jobs:
   plan:
-    if: ${{ !github.event.repository.is_template }}
+    # main 에서만 — 다른 브랜치를 골라 실행하면 리뷰·merge 되지 않은 코드의 마이그레이션이 프로덕션 DB 에 들어간다.
+    if: ${{ !github.event.repository.is_template && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
