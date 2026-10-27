@@ -139,6 +139,7 @@ export async function collectCi({ runId, metaDir }) {
     test: conclusion('test'),
     fingerprint: conclusion('fingerprint'),
     preview: conclusion('preview'),
+    e2e: conclusion('e2e'),
     autofix: conclusion('Claude auto-fix'),
     native: null,
     nativeSources: [],
@@ -160,9 +161,9 @@ export async function collectCi({ runId, metaDir }) {
     for (const key of ['web', 'update']) if (OUTCOMES.includes(preview[key])) ci[key] = preview[key];
     if (typeof preview.finished_at === 'string' && !Number.isNaN(Date.parse(preview.finished_at))) ci.previewAt = preview.finished_at;
   }
-  // test·fingerprint 가 통과했고 preview 가 실패하지 않았으면(건너뜀 포함) CI 통과로 본다.
+  // test·fingerprint 가 통과했고 preview·e2e 가 실패하지 않았으면(건너뜀 포함) CI 통과로 본다.
   const notFailed = (c) => ['success', 'skipped', 'missing'].includes(c);
-  ci.ok = ci.test === 'success' && notFailed(ci.fingerprint) && notFailed(ci.preview);
+  ci.ok = ci.test === 'success' && notFailed(ci.fingerprint) && notFailed(ci.preview) && notFailed(ci.e2e);
   return ci;
 }
 
