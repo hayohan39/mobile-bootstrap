@@ -106,7 +106,8 @@ function eas(args) {
 }
 
 const commitMessage = () => {
-  const sha = (process.env.GITHUB_SHA ?? '').slice(0, 7);
+  // deploy.yml 은 CI 가 끝난 뒤(workflow_run) 돌아서 GITHUB_SHA 가 배포하는 커밋이 아닐 수 있다 — DEPLOY_SHA 가 그 커밋이다.
+  const sha = (process.env.DEPLOY_SHA || process.env.GITHUB_SHA || '').slice(0, 7);
   const title = (process.env.COMMIT_TITLE ?? '').split('\n')[0].slice(0, 80);
   return [sha, title].filter(Boolean).join(' ') || 'deploy';
 };

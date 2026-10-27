@@ -12,6 +12,7 @@ jobs:
   cleanup:
     if: github.event.pull_request.head.repo.full_name == github.repository && !github.event.repository.is_template
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:

@@ -77,7 +77,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty')
+          # 배포한 커밋은 deploy.yml 의 실행 이름(run-name)에 있다. 이름에 커밋이 없는 옛 실행은 head_sha 가 그 커밋이다.
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=20" \
+            --jq '[.workflow_runs[] | ((.display_title | capture("(?<s>[0-9a-f]{40})") | .s)? // .head_sha)][0] // empty')
           if [ "$last" != "$GITHUB_SHA" ]; then
             echo "::error::main(${GITHUB_SHA::7}) 이 마지막 스테이징 배포(${last:0:7})와 다릅니다. 스테이징 배포가 끝나고 폰에서 확인한 뒤 다시 실행하세요(무시하려면 force=true)."
             exit 1

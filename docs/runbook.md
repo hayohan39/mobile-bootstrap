@@ -105,7 +105,8 @@ EAS 가 보관하므로 보통 잃지 않는다. 계정 사고로 Android 업로
 ## 정기 점검 (월 1회)
 
 - `node scripts/gh.mjs risk-history` — 등급과 실제 결과(스테이징 실패, 출시 후 롤백)가 맞는지(점수 보정).
-- Dependabot PR 처리(보안 업데이트 우선). Expo SDK 는 1년에 2~3번 나온다 — SDK 업그레이드는 별도 PR·스토어 출시.
+- 의존성: 리포의 보안 알림(Security → Dependabot alerts)을 보고 필요한 것을 세션에서 올린다("supabase-js 보안 업데이트 해줘").
+  Dependabot 버전 업데이트 PR 은 쓰지 않는다(쉬는 달에도 Actions 시간을 쓴다). Expo SDK 는 1년에 2~3번 나온다 — SDK 업그레이드는 별도 PR·스토어 출시.
 - 스토어 요구사항: Google Play target API 마감(매년 8월 말), Apple 의 새 Xcode·SDK 요구(매년 봄), 연령 등급 설문.
 - 최소 지원 버전을 올릴 수 있는지(오래된 버전의 사용자 비율) — 올리면 contract 마이그레이션을 할 수 있다.
 - Expo(빌드·OTA MAU) · Supabase · Sentry · Claude 사용량과 비용, Apple 개발자 멤버십 갱신일.

@@ -1,6 +1,10 @@
 name: Deploy (staging)
+# 배포한 커밋을 실행 이름에 남긴다. workflow_run 으로 시작한 실행의 head_sha 는 배포한 커밋이 아니라 그 순간의 main 이라서,
+# "마지막으로 성공한 배포" 는 이 이름에서 읽는다(아래 database job, release.yml).
+run-name: Deploy ${{ github.event.workflow_run.head_sha || github.sha }}
 
-# merge(main push) = 스테이징 배포. 사용자에게 내보내는 출시는 release.yml(사람의 요청)로 따로 한다.
+# merge(main push) → CI 의 test 통과 → 스테이징 배포. 사용자에게 내보내는 출시는 release.yml(사람의 요청)로 따로 한다.
+# test 가 실패하거나 취소되면(뒤이은 merge 가 CI 를 취소) 배포하지 않는다 — 다음 merge 의 배포가 그 코드까지 포함한다.
 #
 #   database  프로덕션 Supabase 에 마이그레이션(supabase db push) → Edge Functions 배포
 #             (스테이징 앱과 프로덕션 앱이 같은 DB 를 쓴다 — 그래서 마이그레이션은 expand → contract)
@@ -14,7 +18,9 @@ name: Deploy (staging)
 # 그 코드까지 포함해서 판정하므로, 문서 merge 가 배포되지 않은 코드를 덮어 "성공" 으로 끝나지 않는다
 # (release.yml 의 "Staging was verified" 가 마지막 성공 배포의 커밋을 기준으로 삼는다).
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -31,10 +37,15 @@ permissions:
 
 env:
   EXPO_NO_TELEMETRY: "1"
+  # 배포할 커밋: CI 가 검사한 main 커밋(workflow_run) 또는 수동 실행한 커밋.
+  DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   database:
-    if: ${{ !github.event.repository.is_template }}
+    if: >-
+      !github.event.repository.is_template
+      && (github.event_name == 'workflow_dispatch'
+          || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -51,18 +62,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ env.DEPLOY_SHA }}
           fetch-depth: 0
 
       # 수동 실행(workflow_dispatch)은 항상 배포한다. 성공한 배포가 없으면(첫 배포) base 가 비어 code=true.
+      # 배포한 커밋은 실행 이름(run-name)에서 읽는다. 이름에 커밋이 없는 옛 실행(push 로 시작)은 head_sha 가 그 커밋이다.
       - name: Changed since the last successful deploy
         id: changes
-        if: github.event_name == 'push'
+        if: github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' || true)
+          last=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy.yml/runs?branch=main&status=success&per_page=20" \
+            --jq '[.workflow_runs[] | ((.display_title | capture("(?<s>[0-9a-f]{40})") | .s)? // .head_sha)][0] // empty' || true)
           echo "마지막 성공 배포: ${last:-(없음)}"
-          node scripts/ci-changes.mjs --base "$last" --head "$GITHUB_SHA"
+          node scripts/ci-changes.mjs --base "$last" --head "$DEPLOY_SHA"
 
       - name: Check configuration
         id: guard
@@ -141,13 +155,15 @@ jobs:
       modes: ${{ steps.staging.outputs.modes }}
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
-      COMMIT_TITLE: ${{ github.event.head_commit.message }}
+      EXPO_PUBLIC_COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      COMMIT_TITLE: ${{ github.event.workflow_run.head_commit.message }}
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - name: Check configuration
         id: guard
@@ -195,8 +211,9 @@ jobs:
 
   report:
     needs: [database, app]
-    if: ${{ always() && needs.database.outputs.code != 'false' && !github.event.repository.is_template }}
+    if: ${{ always() && needs.database.result != 'skipped' && needs.database.outputs.code != 'false' && !github.event.repository.is_template }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
@@ -210,7 +227,7 @@ jobs:
           REPORT: ${{ needs.app.outputs.report }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[0].number // empty' || true)
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/pulls" --jq '.[0].number // empty' || true)
           if [ "$DB" = failure ] || [ "$APP" = failure ]; then
             head="❌ 스테이징 배포 실패 — DB: $DB · 앱: $APP. 실행 로그를 확인하세요(DB 마이그레이션이 실패했으면 앱은 배포하지 않았습니다)."
           elif [ "$APP" = success ] && [[ "$MODES" == *build* ]]; then

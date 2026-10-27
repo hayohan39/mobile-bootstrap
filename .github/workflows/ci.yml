@@ -6,8 +6,8 @@ name: CI
 #                / 웹 export + Playwright 스모크 + 이미 main 에 있는 마이그레이션을 고치지 않았는지
 #   fingerprint  base 와 head 의 runtimeVersion(fingerprint) 비교 → 네이티브 변경(새 빌드 필요)인지
 #   preview      웹 프리뷰(EAS Hosting) + 앱 프리뷰(EAS Update, branch pr-<n>) → PR 코멘트
-#   e2e          네이티브 변경이거나 `e2e` 라벨이면 Android release 빌드 → 에뮬레이터에서 Maestro
-#   refine       위가 통과하면 Claude 가 품질 리뷰 → 작은 정리는 [claude-refine] 커밋
+#   e2e          `e2e` 라벨이 있을 때만 Android release 빌드 → 에뮬레이터에서 Maestro
+#   refine       위가 통과하면 Claude 가 품질 리뷰 → 작은 정리는 [claude-refine] 커밋 (PR 당 1회)
 #   autofix      위 중 하나라도 실패하면 Claude 가 로그를 읽고 고쳐서 push
 #
 # 이 실행이 끝나면 pr-review.yml(workflow_run) 이 main 의 코드로 AI 리뷰 + Risk Score 를 내고
@@ -17,13 +17,17 @@ name: CI
 # Actions 시간 아끼기(무료 사용량은 계정의 모든 비공개 리포지토리가 나눠 쓴다):
 #   - 문서만 바뀐 PR(scripts/ci-changes.mjs): test 는 성공으로 바로 끝나고 나머지는 건너뛴다.
 #     test 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 검사이고, Risk 리뷰가 test 성공을 CI 통과로 본다.
-#   - e2e 는 같은 PR 에서 같은 네이티브 상태로 한 번 통과하면 다시 빌드하지 않는다(e2e 라벨이면 매번).
-#   - main push 에서는 돌지 않는다 — 브랜치 보호로 PR 의 test 를 이미 통과했다(스테이징 배포는 deploy.yml).
-#     main 을 다시 검사하려면 Actions → CI → Run workflow.
+#   - e2e 는 `e2e` 라벨이 있을 때만 돈다(빌드+에뮬레이터 20~60분). 네이티브 변경은 merge 후 스테이징 빌드를
+#     폰에서 확인하는 것이 기본 검증이다. 같은 네이티브 상태로 한 번 통과하면 다시 빌드하지 않는다.
+#   - 품질 리뷰(refine)는 PR 당 1회. 끝나면 `quality-reviewed` 라벨을 붙이고, 그 뒤 push 에서는 job 자체가 건너뛴다(0분).
+#   - main push 에서는 test 만 돈다. 브랜치 보호가 "최신 main 포함" 을 요구하지 않아 merge 결과물은 PR 에서
+#     검사되지 않았기 때문이다. 스테이징 배포(deploy.yml)는 이 test 가 통과한 뒤에 시작한다.
 on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -44,7 +48,7 @@ jobs:
   test:
     name: test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20 # 평소 5~10분
     outputs:
       full: ${{ steps.scope.outputs.full }}
     steps:
@@ -52,11 +56,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      # PR 은 base 와, main push 는 직전 main(before)과 비교한다. 수동 실행은 base 가 없어 전체를 돈다.
       - name: Changed files
         id: changes
-        if: github.event_name == 'pull_request'
+        if: github.event_name != 'workflow_dispatch'
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: node scripts/ci-changes.mjs --base "$BASE"
 
       # code=false(문서만) → 아무 검사도 하지 않는다.
@@ -154,7 +159,7 @@ jobs:
     name: fingerprint
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10 # 평소 2~3분
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
       android: ${{ steps.compare.outputs.android }}
@@ -220,7 +225,10 @@ jobs:
               echo "바뀐 요소: \`${list:-알 수 없음}\`"
               if [ "${{ steps.e2e.outputs.cache-hit }}" = "true" ]; then
                 echo ""
-                echo "e2e ⏭️ — 이 PR 의 이전 커밋에서 같은 네이티브 상태로 통과했습니다. 마지막 커밋으로 다시 돌리려면 \`e2e\` 라벨을 붙이고 push 하세요."
+                echo "e2e ⏭️ — 이 PR 의 이전 커밋에서 같은 네이티브 상태로 통과했습니다."
+              elif [ "${{ contains(github.event.pull_request.labels.*.name, 'e2e') }}" != "true" ]; then
+                echo ""
+                echo "e2e(에뮬레이터 검사)는 꺼져 있습니다. 돌리려면 \`e2e\` 라벨을 붙이고 다음 커밋을 push 하세요."
               fi
             } >> "$GITHUB_STEP_SUMMARY"
           else
@@ -249,7 +257,7 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.repository.is_template
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15 # 평소 4~7분
     permissions:
       contents: read
       pull-requests: write
@@ -361,12 +369,12 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # Android 에뮬레이터에서 실제 앱을 띄워 Maestro 흐름(.maestro/)을 돌린다. 네이티브 변경은 웹 스모크로
-  # 검증되지 않으므로 이때 돈다. JS 변경도 돌리고 싶으면 PR 에 `e2e` 라벨을 붙이고 다음 커밋을 push 한다
+  # Android 에뮬레이터에서 release 빌드를 띄워 Maestro 흐름(.maestro/)을 돌린다 — 빌드가 되고, 켜자마자 죽지 않는지.
+  # PR 에 `e2e` 라벨이 있을 때만 돈다. 라벨을 붙인 뒤 다음 커밋을 push 하면 시작한다
   # (라벨 이벤트로는 CI 를 다시 돌리지 않는다 — 라벨 변경이 진행 중인 CI 를 취소하지 않게).
+  # 라벨이 없으면 네이티브 변경은 merge 후 스테이징 빌드를 폰에서 확인하는 것으로 검증한다.
   # EAS 를 쓰지 않고 러너에서 직접 빌드한다(EAS 무료 빌드 한도 보존). 빌드+에뮬레이터는 한 번에 20~60분이라,
-  # 같은 PR 에서 같은 네이티브 상태로 이미 통과했으면 다시 돌리지 않는다 — 그 뒤의 JS 변경은 다른 JS PR 처럼
-  # jest·웹 스모크로 검증된다. `e2e` 라벨이 있으면 매번 돈다.
+  # 네이티브 변경 PR 은 같은 네이티브 상태로 이미 통과했으면 다시 돌리지 않는다. JS 만 바뀐 PR 은 라벨이 있는 동안 push 마다 돈다.
   # ---------------------------------------------------------------------------
   e2e:
     name: e2e
@@ -374,8 +382,8 @@ jobs:
     if: >-
       github.event_name == 'pull_request'
       && needs.test.outputs.full == 'true'
-      && ((needs.fingerprint.outputs.changed == 'true' && needs.fingerprint.outputs.e2e_passed != 'true')
-          || contains(github.event.pull_request.labels.*.name, 'e2e'))
+      && contains(github.event.pull_request.labels.*.name, 'e2e')
+      && !(needs.fingerprint.outputs.changed == 'true' && needs.fingerprint.outputs.e2e_passed == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
@@ -452,7 +460,7 @@ jobs:
 
       - uses: actions/cache/save@v5
         if: needs.fingerprint.outputs.changed == 'true'
-        continue-on-error: true # e2e 라벨로 다시 돌아 같은 키가 이미 있으면 저장이 거절된다(정상)
+        continue-on-error: true # 같은 키가 이미 있으면 저장이 거절된다(정상)
         with:
           path: .e2e-pass
           key: e2e-pass-${{ needs.fingerprint.outputs.android }}-${{ hashFiles('.maestro/**') }}
@@ -471,8 +479,9 @@ jobs:
   # 동작이 바뀌지 않는 작은 정리는 직접 반영해 [claude-refine] 커밋으로 push 하고,
   # 큰 리팩터링·테스트 추가는 제안으로 PR 코멘트(🧹 품질 리뷰)에 남긴다.
   #
-  # 작성자 push 한 번에 한 번만 돈다: HEAD 가 이미 [claude-refine] 커밋이면 건너뛴다
-  # (REFINE_MAX_ROUNDS, 기본 1). 그래서 리뷰 ↔ 수정이 끝없이 돌지 않는다.
+  # PR 당 1회: 시작할 때 `quality-reviewed` 라벨을 붙이고, 라벨이 있으면 job 을 건너뛴다(러너도 뜨지 않음).
+  # 다시 돌리려면 라벨을 떼고 push 한다. 작성자 push 마다 돌리려면 변수 REFINE_EVERY_PUSH=true —
+  # 그때도 HEAD 가 이미 [claude-refine] 커밋이면 건너뛴다(REFINE_MAX_ROUNDS, 기본 1). 리뷰 ↔ 수정이 끝없이 돌지 않게.
   # 끄기: PR 에 no-refine 라벨, 리포 전체는 변수 CLAUDE_REFINE=false.
   # push 가 CI 를 다시 돌리려면 auto-fix 와 같은 토큰(Claude GitHub App 또는 BOT_PAT)이 필요하다.
   # ---------------------------------------------------------------------------
@@ -491,10 +500,11 @@ jobs:
       && github.event.pull_request.draft == false
       && github.event.pull_request.user.login != 'dependabot[bot]'
       && !contains(github.event.pull_request.labels.*.name, 'no-refine')
+      && (vars.REFINE_EVERY_PUSH == 'true' || !contains(github.event.pull_request.labels.*.name, 'quality-reviewed'))
       && vars.CLAUDE_REFINE != 'false'
     runs-on: ubuntu-latest
     # Claude 가 멈추면 기본 한도(6시간)까지 과금된다. --max-turns 40 이면 보통 10분 안에 끝난다.
-    timeout-minutes: 30
+    timeout-minutes: 20
     permissions:
       contents: write
       pull-requests: write
@@ -546,6 +556,17 @@ jobs:
           done < <(git log --format=%s -n 20)
           echo "연속 품질 반영 커밋: $rounds / $MAX_ROUNDS"
           if [ "$rounds" -ge "$MAX_ROUNDS" ]; then echo "proceed=false" >> "$GITHUB_OUTPUT"; else echo "proceed=true" >> "$GITHUB_OUTPUT"; fi
+
+      # 리뷰를 시작하기 전에 라벨부터 붙인다 — [claude-refine] 커밋의 push 가 이 라벨을 보고 다시 부르지 않게.
+      - name: Mark the PR as reviewed
+        if: steps.guard.outputs.proceed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/labels" -f name=quality-reviewed -f color=c5def5 \
+            -f description="품질 리뷰를 마침 (떼고 push 하면 다시 리뷰)" >/dev/null 2>&1 || true
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/labels" -f "labels[]=quality-reviewed" >/dev/null
 
       - uses: actions/setup-node@v7
         if: steps.guard.outputs.proceed == 'true'
@@ -708,7 +729,7 @@ jobs:
       && !contains(github.event.pull_request.labels.*.name, 'no-autofix')
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30 # Claude 가 멈춰도 6시간 과금되지 않게
+    timeout-minutes: 25 # Claude 가 멈춰도 6시간 과금되지 않게
     permissions:
       contents: write
       pull-requests: write

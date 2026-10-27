@@ -11,9 +11,11 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
-// 앱·DB·빌드에 영향이 없는 파일. src/·assets/ 안의 .md 는 번들에 들어갈 수 있어 문서로 보지 않는다.
+// 앱·DB·빌드에 영향이 없는 파일. 세 템플릿(mobile·production·project)이 같은 규칙을 쓴다.
+//   - src/·assets/ 안의 .md 는 번들에 들어갈 수 있어 문서로 보지 않는다.
+//   - .github/review/·.github/risk/ 의 .md 는 리뷰 기준(프롬프트·rubric)이라 파이프라인에 영향이 있다.
 const DOCS = [/^docs\//, /\.md$/, /^LICENSE(\.|$)/];
-const NEVER_DOCS = [/^src\//, /^assets\//];
+const NEVER_DOCS = [/^src\//, /^assets\//, /^\.github\/(review|risk)\//];
 
 export const isDocs = (file) => DOCS.some((re) => re.test(file)) && !NEVER_DOCS.some((re) => re.test(file));
 

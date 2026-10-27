@@ -167,7 +167,9 @@ try {
       all.sort((a, b) => b.created_at.localeCompare(a.created_at));
       for (const run of all.slice(0, 10)) {
         const mark = run.status !== 'completed' ? '⏳' : run.conclusion === 'success' ? '✅' : run.conclusion === 'skipped' ? '⏭️' : '❌';
-        console.log(`${mark} ${run.created_at.slice(0, 16).replace('T', ' ')} [${run.label}] ${run.head_sha.slice(0, 7)} ${run.display_title}\n   ${run.html_url}`);
+        // deploy.yml 은 CI 뒤에(workflow_run) 돌아 head_sha 가 그 순간의 main 이다 — 배포한 커밋은 실행 이름(run-name)에 있다.
+        const sha = run.display_title.match(/\b[0-9a-f]{40}\b/)?.[0] ?? run.head_sha;
+        console.log(`${mark} ${run.created_at.slice(0, 16).replace('T', ' ')} [${run.label}] ${sha.slice(0, 7)} ${run.display_title}\n   ${run.html_url}`);
       }
       if (!all.length) console.log('배포 기록 없음');
       break;

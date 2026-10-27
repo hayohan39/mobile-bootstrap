@@ -111,16 +111,20 @@ GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다�
 
 | 낭비 | 막는 방법 |
 | --- | --- |
-| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시). `e2e` 라벨이면 매번 |
+| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | `e2e` 라벨이 있을 때만 돈다(네이티브 변경의 기본 검증은 merge 후 스테이징 빌드). 라벨이 있어도 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시) |
+| 품질 리뷰(refine)가 push 마다 + 정리 커밋이 CI 를 한 번 더 | PR 당 1회: 시작할 때 `quality-reviewed` 라벨을 붙이고, 라벨이 있으면 job 이 건너뛴다(러너도 뜨지 않음) |
 | 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·품질 리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정(이름 바꾸기는 옛 경로까지) → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀. deploy 는 **마지막 성공 배포** 이후가 문서뿐일 때만 건너뜀 — 앞선 배포가 실패·취소됐으면 그 코드까지 배포한다 |
-| merge 후 main 에서 같은 test 를 다시 | ci.yml 의 main push 트리거 없음(브랜치 보호로 PR 에서 이미 통과). 필요하면 수동 실행 |
+| (일부러 쓰는 시간) merge 후 main 에서 test 를 다시 | 브랜치 보호가 "최신 main 포함"(strict)을 요구하지 않아 merge 결과물은 PR 에서 검사되지 않는다. main push 에서는 test 만(문서만이면 스텝 건너뜀) 돌고, deploy.yml 은 그 test 가 통과한 뒤 `workflow_run` 으로 시작한다. strict 를 켜면 PR 마다 "Update branch" 로 CI 전체가 한 번 더 돌아 더 비싸다 |
+| Dependabot 이 쉬는 리포에도 매주 PR → CI·리뷰 | Dependabot 버전 업데이트를 쓰지 않는다. 의존성은 세션에서 요청해 올린다. 보안 알림(Dependabot alerts)은 리포 설정에서 켠다(PR·Actions 없음) |
 | 출시 전·롤아웃 100% 뒤에도 매일 도는 rollout-monitor(실행마다 npm ci + EAS CLI) | 할 일이 없으면 스스로 disable, release.yml(kind=ota·rollout)이 enable. `actions: write` 는 그 한 줄짜리 job 에만(EXPO_TOKEN 을 쓰는 job 에는 주지 않는다) |
-| Claude job 이 멈추면 기본 한도 6시간 과금 | refine·autofix 30분, @claude 45분 timeout |
+| job 이 멈추면 기본 한도 6시간 과금 | 모든 job 에 timeout(평소 시간의 2~3배): test 20분 · preview 15분 · refine 20분 · autofix 25분 · @claude 45분 · 1분짜리 job 5~10분 |
 
 `test` 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 체크이고, `scripts/risk/cli.mjs ci` 가 `test == success` 를 CI 통과
 조건으로 본다(skipped 면 AI 리뷰가 "CI 실패" 로 빠진다). 그래서 job 은 돌되 스텝을 건너뛴다(1분).
-draft PR 은 가볍게 돌리지 않는다 — `risk-gate.yml` 이 `ready_for_review` 에 반응하지 않아서, draft 기준(fingerprint·e2e 없이)
-매긴 risk-gate 가 Ready for review 뒤에도 남아 그 사이에 merge 될 수 있다.
-e2e 를 건너뛰는 것은 의도한 절충이다: 네이티브 상태가 같으면 뒤의 JS 변경은 다른 JS PR 처럼 jest·웹 스모크로만 본다
-(새 네이티브 모듈을 잘못 부르는 JS 는 못 잡을 수 있다). 마지막 커밋으로 다시 보려면 `e2e` 라벨.
+draft PR 도 같은 검사를 돈다(Ready for review 때 CI 와 PR 리뷰가 다시 돈다).
+e2e 를 라벨로만 돌리는 것은 의도한 절충이다: 네이티브 변경이 앱을 켜자마자 깨뜨려도 merge 전에는 모르고,
+merge 후 스테이징 빌드(EAS)에서 드러난다. 스테이징은 사용자 본인만 쓰고 출시는 따로 하므로 그 비용이 e2e 의 20~60분보다 작다고 봤다.
+라벨이 있어도 네이티브 상태가 같으면 뒤의 JS 변경은 jest·웹 스모크로만 본다(새 네이티브 모듈을 잘못 부르는 JS 는 못 잡을 수 있다).
+`workflow_run` 으로 시작한 deploy 의 `head_sha` 는 그 순간의 main 이라 배포한 커밋과 다를 수 있다 — 그래서 `run-name` 에 배포한
+커밋을 넣고, "마지막으로 성공한 배포" 는 그 이름에서 읽는다(deploy.yml · release.yml).
 EAS 클라우드 빌드는 원래 fingerprint 가 바뀔 때만 만들고 `--no-wait` 라 Actions 가 기다리지 않는다.

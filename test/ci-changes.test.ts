@@ -21,6 +21,12 @@ describe("ci-changes", () => {
     expect(codeChanged([".maestro/smoke.yaml"])).toBe(true);
   });
 
+  it("리뷰 기준(.github/review·risk)의 .md 는 파이프라인에 영향이 있어 문서로 보지 않는다", () => {
+    expect(isDocs(".github/review/quality.md")).toBe(false);
+    expect(isDocs(".github/risk/rubric.md")).toBe(false);
+    expect(isDocs(".github/pull_request_template.md")).toBe(true);
+  });
+
   it("src/·assets/ 안의 .md 는 번들에 들어갈 수 있어 문서로 보지 않는다", () => {
     expect(isDocs("src/features/game/notes.md")).toBe(false);
     expect(isDocs("assets/credits.md")).toBe(false);
