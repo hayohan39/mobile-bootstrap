@@ -104,7 +104,6 @@ export function renderSummary({ assessment, checks, ci, previous = null, repoUrl
   L.push(`| test (lint·type·test·DB/RLS·웹 스모크) | ${ciIcon(ci.test)} |`);
   L.push(`| 네이티브 변경 (fingerprint) | ${ci.native ? nativeCell(ci.native, ci.nativeSources ?? []) : ciIcon(ci.fingerprint)} |`);
   L.push(`| preview (웹·OTA) | ${previewCell(ci)} |`);
-  if (ci.e2e && ci.e2e !== 'skipped' && ci.e2e !== 'missing') L.push(`| e2e (Android 에뮬레이터) | ${ciIcon(ci.e2e)} |`);
   if (ci.autofix && ci.autofix !== 'skipped' && ci.autofix !== 'missing') L.push(`| auto-fix | ${ciIcon(ci.autofix)} |`);
   L.push(`| AI 리뷰 | ${a.review ? `${verdictText(a)}${reusedNote(a)}` : '건너뜀 (CI 실패·비활성·장애) — 규칙 기반 점수만'} |`);
 
