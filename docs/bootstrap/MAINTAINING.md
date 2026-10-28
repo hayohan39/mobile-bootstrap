@@ -24,8 +24,9 @@
 
 ## 템플릿 리포지토리 자신의 워크플로
 
-- `ci.yml` 의 `test`·`fingerprint`·`e2e`(`e2e` 라벨 시)는 템플릿에서도 돈다 → 템플릿 앱이 항상 초록인지 확인.
-  SDK 업그레이드처럼 네이티브가 바뀌는 템플릿 PR 에는 `e2e` 라벨을 붙인다(공개 리포라 Actions 시간이 들지 않는다).
+- `ci.yml` 의 `test`·`fingerprint` 는 템플릿에서도 돈다 → 템플릿 앱이 항상 초록인지 확인.
+  템플릿에는 스테이징이 없으니 SDK 업그레이드처럼 네이티브가 바뀌는 템플릿 PR 은 `node scripts/gh.mjs dispatch e2e.yml --ref <브랜치>`
+  로 에뮬레이터 e2e 를 돌려 본다(공개 리포라 Actions 시간이 들지 않는다).
 - `preview`, `deploy.yml`, `release.yml`, `rollback.yml`, `rollout-monitor.yml`, `preview-cleanup.yml` 은
   `github.event.repository.is_template` 으로 건너뛴다.
 - `pr-review.yml` 은 템플릿 PR 에서도 돈다. main 에 있는 버전이 실행되므로 이 파일이나

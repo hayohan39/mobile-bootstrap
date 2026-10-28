@@ -12,6 +12,7 @@
 //   node scripts/gh.mjs risk-history [--limit 20]     merge 된 PR 의 Risk 등급과 배포 결과 (점수 보정용)
 //   node scripts/gh.mjs dispatch <workflow.yml> [key=value ...]
 //       스테이징 올리기: dispatch deploy.yml [e2e=auto|always|skip] [force=true]
+//       브랜치에서 e2e 만: dispatch e2e.yml --ref <브랜치>
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';

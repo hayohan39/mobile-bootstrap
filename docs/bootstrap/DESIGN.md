@@ -1,7 +1,7 @@
 # 설계 근거
 
 mobile-bootstrap 이 왜 이렇게 생겼는지. production-bootstrap(웹)의 [DESIGN.md](https://github.com/hayohan39/production-bootstrap/blob/main/docs/bootstrap/DESIGN.md)
-에서 그대로 가져온 결정(클라우드 세션의 GitHub 프록시, REST 헬퍼, auto-fix 토큰, 품질 리뷰, Risk Score 의 두 겹 평가와
+에서 그대로 가져온 결정(클라우드 세션의 GitHub 프록시, REST 헬퍼, auto-fix 토큰, Risk Score 의 두 겹 평가와
 main 의 코드로 평가하기)은 반복하지 않고 **모바일이라서 달라진 것**만 쓴다.
 merge 게이트(risk-gate)는 2026-10 에 없앴다 — 필수 체크는 `test` 하나, Risk 는 PR 종합 코멘트로만 보여 준다.
 
@@ -81,7 +81,7 @@ vitest 는 `.mjs` 스크립트(Risk·출시·프로비저닝)와 DB 테스트를
 
 ## 10. Actions 안의 Claude 와 토큰 — 누가 무엇으로 push 하나
 
-GitHub 는 **`GITHUB_TOKEN` 으로 한 push 로는 워크플로를 다시 실행하지 않는다**(무한 루프 방지). 그래서 auto-fix·품질 리뷰·`@claude` 가
+GitHub 는 **`GITHUB_TOKEN` 으로 한 push 로는 워크플로를 다시 실행하지 않는다**(무한 루프 방지). 그래서 auto-fix·`@claude` 가
 고친 커밋이 CI 를 다시 받으려면 다른 토큰으로 push 해야 한다.
 
 | 토큰 | 어디서 | 쓰임 |
@@ -90,7 +90,7 @@ GitHub 는 **`GITHUB_TOKEN` 으로 한 push 로는 워크플로를 다시 실행
 | Claude App 토큰 | `claude-code-action` 이 OIDC 로 받음(Claude GitHub App 설치 필요) | Claude 의 `git push` → CI 다시 실행 |
 | `BOT_PAT`(선택) | 시크릿 | App 대신 쓰는 토큰. 있으면 위 두 자리를 모두 대신한다 |
 
-ci.yml(refine·autofix)과 claude-mention.yml 의 순서:
+ci.yml(autofix)과 claude-mention.yml 의 순서:
 
 1. `actions/checkout` 은 `persist-credentials: false` — v7 은 토큰을 includeIf 로 따로 저장하는데 action 이 그걸 지우지 못한다.
 2. 다음 스텝이 토큰을 `.git/config` 의 `http.https://github.com/.extraheader`(checkout v4 방식)로 넣는다.
@@ -98,13 +98,13 @@ ci.yml(refine·autofix)과 claude-mention.yml 의 순서:
 3. action 이 시작하며 이 헤더를 지우고("Removing existing git authentication headers") 원격 주소에 App 토큰을 넣는다 → push 는 App 토큰.
 4. action 은 끝날 때 App 토큰을 폐기한다. 그 뒤 스텝은 git 원격 대신 API(`gh`, `GITHUB_TOKEN`)를 쓴다.
 5. App 토큰으로 push 한 커밋의 CI·PR 리뷰는 `claude[bot]` 이 시작한 실행이다. action 은 bot 이 시작한 실행을 기본으로 거부하므로
-   ci.yml(refine·autofix)과 pr-review.yml 에 `allowed_bots: claude` 를 둔다(@claude 는 사람의 코멘트로만 시작하므로 두지 않는다).
+   ci.yml(autofix)과 pr-review.yml 에 `allowed_bots: claude` 를 둔다(@claude 는 사람의 코멘트로만 시작하므로 두지 않는다).
 
 증상과 원인:
-- Claude 커밋(`[claude-refine]`·`[claude-autofix]`·`@claude`)에 체크가 하나도 안 붙는다 → push 가 `GITHUB_TOKEN` 으로 나갔다(2·3 이 깨짐).
+- Claude 커밋(`[claude-autofix]`·`@claude`)에 체크가 하나도 안 붙는다 → push 가 `GITHUB_TOKEN` 으로 나갔다(2·3 이 깨짐).
 - `@claude` 가 `fatal: could not read Username` 으로 멈춘다 → 2 의 헤더가 없다.
-- Claude 커밋 뒤 품질 리뷰가 "결과를 남기지 못했습니다", PR 리뷰가 "AI 리뷰 없음" → `Workflow initiated by non-human actor` (5 가 빠짐).
-- `ci.yml` 을 바꾸는 PR 에서는 refine 이 건너뛴다 — action 이 기본 브랜치와 다른 워크플로에는 App 토큰을 주지 않기 때문(정상).
+- Claude 커밋 뒤 PR 리뷰가 "AI 리뷰 없음" → `Workflow initiated by non-human actor` (5 가 빠짐).
+- `ci.yml` 을 바꾸는 PR 에서는 auto-fix 가 push 하지 못한다 — action 이 기본 브랜치와 다른 워크플로에는 App 토큰을 주지 않기 때문(정상).
 
 ## 11. Actions 시간은 계정 전체가 나눠 쓴다
 
@@ -114,20 +114,20 @@ GitHub 의 무료 Actions 사용량(Free 월 2,000분)은 리포지토리마다�
 
 | 낭비 | 막는 방법 |
 | --- | --- |
-| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | PR 에서는 `e2e` 라벨이 있을 때만 돈다. 네이티브가 바뀐 스테이징을 올릴 때 한 번 돈다(단계는 `.github/actions/android-e2e` 로 공유). 라벨이 있어도 같은 PR·같은 Android fingerprint·같은 `.maestro/` 로 통과했으면 건너뜀(PR 범위 캐시에 통과 표시) |
-| 품질 리뷰(refine)가 push 마다 + 정리 커밋이 CI 를 한 번 더 | PR 당 1회: 시작할 때 `quality-reviewed` 라벨을 붙이고, 라벨이 있으면 job 이 건너뛴다(러너도 뜨지 않음) |
-| 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·품질 리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정(이름 바꾸기는 옛 경로까지) → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀. deploy 는 **마지막 성공 배포** 이후가 문서뿐일 때만 건너뜀 — 앞선 배포가 실패·취소됐으면 그 코드까지 배포한다 |
+| 네이티브 PR 에 push 할 때마다 Android 빌드 + 에뮬레이터(20~60분) | PR 에서는 돌지 않는다. 네이티브가 바뀐 스테이징을 올릴 때 한 번 돈다. merge 전에 기기에서 보고 싶으면 수동 `e2e.yml`(단계는 `.github/actions/android-e2e` 로 공유) |
+| CI 의 품질 리뷰 job + 그 정리 커밋이 CI 를 한 번 더(PR 당 약 15분) | CI 에서 품질 리뷰를 하지 않는다. push 전에 세션이 `.github/review/quality.md` 로 다듬는다. 독립 리뷰가 필요한 버그·보안·호환성은 AI 리뷰(PR 당 1회)가 본다 |
+| 문서만 바꾼 PR·merge 가 전체 검사·프리뷰·OTA 배포까지 | `scripts/ci-changes.mjs` 판정(이름 바꾸기는 옛 경로까지) → test 는 성공으로 바로 끝나고(필수 검사·Risk 의 CI 통과 조건 유지) 나머지 job 은 건너뜀. deploy 는 **마지막 성공 배포** 이후가 문서뿐일 때만 건너뜀 — 앞선 배포가 실패·취소됐으면 그 코드까지 배포한다 |
 | merge 마다 스테이징(OTA·새 빌드) — 확인하지도 않을 배포 | merge 때는 아무것도 돌지 않는다. 스테이징은 요청할 때(deploy.yml 수동 실행) 여러 PR 을 모아 한 번: main 전체 검사(브랜치 보호가 "최신 main 포함" 을 요구하지 않아 merge 결과물은 PR 에서 검사되지 않았다) → 네이티브가 바뀌었으면 e2e → DB → OTA·빌드. strict 를 켜면 PR 마다 "Update branch" 로 CI 전체가 한 번 더 돌아 더 비싸다 |
 | Dependabot 이 쉬는 리포에도 매주 PR → CI·리뷰 | Dependabot 버전 업데이트를 쓰지 않는다. 의존성은 세션에서 요청해 올린다. 보안 알림(Dependabot alerts)은 리포 설정에서 켠다(PR·Actions 없음) |
 | 출시 전·롤아웃 100% 뒤에도 매일 도는 rollout-monitor(실행마다 npm ci + EAS CLI) | 할 일이 없으면 스스로 disable, release.yml(kind=ota·rollout)이 enable. `actions: write` 는 그 한 줄짜리 job 에만(EXPO_TOKEN 을 쓰는 job 에는 주지 않는다) |
-| job 이 멈추면 기본 한도 6시간 과금 | 모든 job 에 timeout(평소 시간의 2~3배): test 20분 · preview 15분 · refine 20분 · autofix 25분 · @claude 45분 · 1분짜리 job 5~10분 |
+| job 이 멈추면 기본 한도 6시간 과금 | 모든 job 에 timeout(평소 시간의 2~3배): test 20분 · preview 15분 · autofix 25분 · e2e 75분 · @claude 45분 · 1분짜리 job 5~10분 |
 
 `test` 를 job 단위로 건너뛰지 않는 이유: 브랜치 보호의 필수 체크이고, `scripts/risk/cli.mjs ci` 가 `test == success` 를 CI 통과
 조건으로 본다(skipped 면 AI 리뷰가 "CI 실패" 로 빠진다). 그래서 job 은 돌되 스텝을 건너뛴다(1분).
 draft PR 도 같은 검사를 돈다(Ready for review 때 CI 와 PR 리뷰가 다시 돈다).
 e2e 를 PR 이 아니라 스테이징에서 돌리는 것은 의도한 절충이다: 네이티브 변경이 앱을 켜자마자 깨뜨려도 merge 전에는 모르고,
 스테이징을 올릴 때 e2e 에서 드러난다(실패하면 DB·앱 배포 전에 멈춘다). merge 는 스테이징·출시가 아니므로 main 이 잠시 깨져도
-사용자 폰에는 닿지 않는다. 미리 보고 싶은 PR 에는 `e2e` 라벨을 붙인다(같은 네이티브 상태로 통과했으면 다시 안 돎).
+사용자 폰에는 닿지 않는다. 미리 보고 싶은 브랜치는 `dispatch e2e.yml --ref <브랜치>` 로 수동 실행한다.
 "마지막으로 성공한 스테이징" 은 deploy.yml 의 실행 이름(run-name 에 배포 커밋)에서 읽는다(deploy.yml · release.yml).
 검사·e2e·DB·앱 중 하나라도 실패한 실행은 실패로 끝나 기준이 되지 않는다.
 EAS 클라우드 빌드는 원래 fingerprint 가 바뀔 때만 만들고 `--no-wait` 라 Actions 가 기다리지 않는다.
