@@ -133,10 +133,13 @@ LOC 가 아니라 **몇 개의 실행 경로가 이 코드를 지나는가**로 
 - 프로덕션 로직이 바뀌었는데 테스트 변경이 없으면 높게 본다(규칙 스캔 floor 10).
 - 테스트를 지우거나 skip/only, `eslint-disable`·`@ts-ignore` 를 추가했으면 높게 본다.
 - **CI 결과를 근거로 쓴다**: lint·typecheck·vitest(로직·Supabase 로컬 DB 의 RLS)·jest(화면)·웹 export 스모크
-  (`test` job), 네이티브 변경 판정(`fingerprint` job), 웹·OTA 프리뷰(`preview`), Android 에뮬레이터 Maestro
-  (`e2e`, 돌았을 때만 — `.review/ci.json` 의 결과로 확인). CI 통과는 "깨지지 않았다" 의 근거이지 "바뀐 동작이 맞다" 의 근거는 아니다.
-- 웹 스모크는 **네이티브 동작(권한, 푸시, 결제, 카메라, 백그라운드)을 검증하지 못한다.** 그런 변경은 e2e 나
-  사람의 스테이징 확인이 없으면 Testing 을 높게 본다.
+  (`test` job), 네이티브 변경 판정(`fingerprint` job), 웹·OTA 프리뷰(`preview`) — `.review/ci.json` 의 결과로 확인.
+  CI 통과는 "깨지지 않았다" 의 근거이지 "바뀐 동작이 맞다" 의 근거는 아니다.
+- Android 에뮬레이터 e2e 는 PR 에서 기본으로 돌지 않는다(스테이징을 올릴 때 네이티브가 바뀌었으면 돈다).
+  `.review/ci.json` 에 e2e 결과가 없으면 네이티브 변경은 merge 전에 기기에서 검증된 적이 없다고 보고 Testing 에 반영한다.
+- 웹 스모크는 **네이티브 동작(권한, 푸시, 결제, 카메라, 백그라운드)을 검증하지 못한다.** 그런 변경은 e2e 결과도
+  사람의 스테이징 확인도 아직 없으므로 Testing 을 높게 본다. PR 본문 "배포 후 확인" 의 스테이징 확인 계획은
+  mitigations 에 쓰는 것이지 Testing 을 낮출 근거가 아니다(아직 하지 않은 확인이다).
 - 새 테이블·정책에 "남의 행은 못 읽고 못 쓴다" 를 확인하는 `test/db/` 테스트가 없으면 Testing 15 이상.
 
 ### 4.5 Migration / Rollback — 배포 후 되돌리기 어렵거나 기존 데이터·상태와 충돌할 가능성
