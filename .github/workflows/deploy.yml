@@ -87,15 +87,16 @@ jobs:
           fi
 
       - uses: actions/setup-node@v7
-        if: steps.last.outputs.sha != '' && steps.changes.outputs.code != 'false'
+        if: steps.last.outputs.sha != '' && (steps.changes.outputs.code != 'false' || inputs.force)
         with:
           node-version-file: .nvmrc
           cache: npm
 
       # 양쪽 모두 install 스크립트 없이 설치해 같은 조건으로 비교한다(ci.yml 의 fingerprint job 과 같은 방식).
+      # force 로 문서만 바뀐 스테이징을 강제할 때도 비교한다 — 건너뛰면 native 가 기본값 true 가 되어 e2e 가 괜히 돈다.
       - name: Native change since then
         id: native
-        if: steps.last.outputs.sha != '' && steps.changes.outputs.code != 'false'
+        if: steps.last.outputs.sha != '' && (steps.changes.outputs.code != 'false' || inputs.force)
         env:
           LAST: ${{ steps.last.outputs.sha }}
         run: |
