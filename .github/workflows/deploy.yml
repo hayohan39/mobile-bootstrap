@@ -109,7 +109,7 @@ jobs:
   check:
     needs: [plan]
     if: needs.plan.outputs.code == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright --with-deps(apt) 가 ubuntu-latest(26) 에서 실패해 고정 — 2026-11-11
     timeout-minutes: 25 # 평소 6~10분
     steps:
       - uses: actions/checkout@v7
@@ -133,6 +133,7 @@ jobs:
       - name: npm run check
         run: npm run check
 
+      # PR CI 에서는 경고만 남기는 검사 — 스테이징은 여기서 막는다. 실패하면 Expo 패치 버전을 맞추는 PR 을 먼저 낸다.
       - name: Expo dependency versions
         run: npx expo install --check
 

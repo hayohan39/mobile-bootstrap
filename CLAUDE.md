@@ -95,6 +95,8 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 2. `node scripts/gh.mjs dispatch deploy.yml` (e2e 는 네이티브가 바뀌었을 때만 자동. 강제 `e2e=always`, 생략 `e2e=skip`)
    → main 전체 검사 → (네이티브 변경이면) Android 에뮬레이터 e2e 20~60분 → DB 마이그레이션 → OTA 또는 새 스테이징 빌드
    → 이번 스테이징에 들어간 PR 들에 결과 코멘트.
+   check 가 **Expo 패치 버전**(`expo install --check`)에서 막히면 — PR CI 에서는 경고만 남기는 검사다 — CI 로그의 기대 버전으로
+   올리는 네이티브 PR 을 먼저 내고, merge 뒤 다시 스테이징을 올린다(세션은 expo.dev 에 못 갈 수 있어 `npm install <pkg>@~<버전>`).
 3. 끝나면(`gh run list --workflow deploy.yml --limit 1` 또는 `deploys`) 두세 줄로 보고한다: OTA 인지 새 빌드(폰에 설치 필요)인지,
    검사·e2e 결과, 포함된 PR. 실패했으면 어디서 멈췄는지(검사·e2e 실패면 아무것도 배포되지 않았다).
 
@@ -128,7 +130,7 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 
 ```
 PR 생성/push ─► ci.yml
-                 ├ test     마이그레이션 append-only · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor
+                 ├ test     마이그레이션 append-only · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor·Expo 버전(경고만)
                  ├ preview  fingerprint 비교(네이티브 변경?) · EAS Update(branch pr-<n>) · 웹 프리뷰 → PR 코멘트
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
                  (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀)
