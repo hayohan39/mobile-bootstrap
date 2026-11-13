@@ -49,4 +49,6 @@ Risk Score 의 Compatibility 판단에 쓰인다. 이 앱의 DB·RPC·Edge Funct
 - 영향: merge = 스테이징(내부 테스트) 배포, 출시는 release 워크플로. DB 는 스테이징·프로덕션이 공유.
   (2026-10-27 변경: 스테이징은 merge 마다가 아니라 사용자가 요청할 때 여러 PR 을 모아 올린다 — main 검사·e2e·빌드를 한 번에.)
   (2026-10-27 변경: PR 의 `e2e` 라벨과 CI 품질 리뷰(refine)를 없앴다 — e2e 는 스테이징·수동 `e2e.yml`, 품질 점검은 push 전 세션.)
+  (2026-11-13 변경: PR CI 의 Expo 버전 검사(`expo install --check`)는 경고만 — Expo 가 며칠마다 SDK 패치를 내서 모든 PR 이 막혔다.
+  스테이징(`deploy.yml`)의 같은 검사는 그대로 막는다. Playwright 를 설치하는 job 은 `ubuntu-24.04` 로 고정 — `ubuntu-latest`(26)에서 apt 실패.)
 - 되돌리는 법: OTA = rollback 워크플로, 스토어 빌드 = 롤아웃 중단 + 핫픽스(`docs/runbook.md`).

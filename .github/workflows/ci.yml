@@ -44,7 +44,7 @@ env:
 jobs:
   test:
     name: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright --with-deps(apt) 가 ubuntu-latest(26) 에서 실패해 고정 — 2026-11-11
     timeout-minutes: 20 # 평소 5~10분
     outputs:
       full: ${{ steps.scope.outputs.full }}
@@ -116,9 +116,21 @@ jobs:
         if: steps.scope.outputs.full == 'true'
         run: npm test
 
-      - name: Expo dependency versions
+      # Expo 는 며칠마다 SDK 패치를 낸다. PR 마다 막지 않고 경고(주석)만 남기고,
+      # 버전 맞추기는 스테이징 전에 한 번 한다 — deploy.yml 의 같은 검사는 그대로 막는다(2026-11-13 결정).
+      - name: Expo dependency versions (경고만)
         if: steps.scope.outputs.full == 'true'
-        run: npx expo install --check
+        run: |
+          if ! out=$(npx expo install --check 2>&1); then
+            echo "$out"
+            behind=$(echo "$out" | grep -c 'expected version' || true)
+            if [ "$behind" -gt 0 ]; then
+              echo "::warning title=Expo 패치 버전이 뒤처짐::${behind}개 패키지 — 스테이징 전에 버전을 맞춰야 합니다(deploy.yml 은 이 검사로 막음)."
+            else
+              # 버전 불일치가 아닌 실패(레지스트리·네트워크 오류, CLI 오류) — 원인을 다르게 알린다.
+              echo "::warning title=Expo 버전 검사를 끝내지 못함::버전 문제가 아닌 오류로 검사가 실패했습니다. 로그를 확인하세요(스테이징 check 에서 다시 검사)."
+            fi
+          fi
 
       # 네트워크 검사(React Native Directory 등)가 섞여 있어 경고로만 남긴다.
       - name: Expo doctor
@@ -366,7 +378,7 @@ jobs:
       && github.event.pull_request.draft == false
       && !contains(github.event.pull_request.labels.*.name, 'no-autofix')
       && github.event.pull_request.user.login != 'dependabot[bot]'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright --with-deps(apt) 가 ubuntu-latest(26) 에서 실패해 고정 — 2026-11-11
     timeout-minutes: 25 # Claude 가 멈춰도 6시간 과금되지 않게
     permissions:
       contents: write
@@ -453,7 +465,7 @@ jobs:
             할 일:
             1. `mcp__github_ci__get_workflow_run_details` 와 `download_job_log` 로
                run ${{ github.run_id }} 에서 실패한 job 과 step 을 찾고 로그를 읽는다.
-               - `test` job: lint / typecheck / vitest(DB·RLS 포함) / jest / expo install --check / 웹 export / Playwright 중 무엇인지
+               - `test` job: lint / typecheck / vitest(DB·RLS 포함) / jest / 웹 export / Playwright 중 무엇인지(expo install --check 는 경고만이라 실패 원인이 아님)
                - `fingerprint` job: 의존성 설치 실패인지(lockfile), 설정이 깨졌는지
                - `preview` job: 웹 export·EAS 업로드 실패인지 (EAS 인증·한도·장애면 코드 문제가 아니다)
             2. 원인만 최소 범위로 고친다. 리팩터링이나 무관한 정리는 하지 않는다.
