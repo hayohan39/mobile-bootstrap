@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { changedFiles, codeChanged, isDocs } from "../scripts/ci-changes.mjs";
+import { affectsApp, appChanged, changedFiles, codeChanged, isDocs } from "../scripts/ci-changes.mjs";
 
 describe("ci-changes", () => {
   it("문서만 바뀌면 앱 코드 변경이 아니다", () => {
@@ -19,6 +19,24 @@ describe("ci-changes", () => {
     expect(codeChanged(["supabase/migrations/20261020000000_x.sql"])).toBe(true);
     expect(codeChanged([".github/workflows/ci.yml"])).toBe(true);
     expect(codeChanged([".maestro/smoke.yaml"])).toBe(true);
+  });
+
+  it("앱 밖(워크플로·scripts·테스트·DB·검사 설정)만 바뀌면 프리뷰가 필요 없다", () => {
+    expect(appChanged([".github/workflows/deploy.yml", "scripts/gh.mjs", "test/game/ads.test.ts", "e2e/web/smoke.spec.ts"])).toBe(false);
+    expect(appChanged(["supabase/migrations/20261020000000_x.sql", ".maestro/smoke.yaml", "jest.setup.js", "eslint.config.js", "docs/a.md"])).toBe(false);
+    expect(appChanged([])).toBe(false);
+  });
+
+  it("앱 번들·앱 설정이 바뀌면 프리뷰를 만든다(처음 보는 경로도 앱으로 본다)", () => {
+    for (const f of ["src/app/index.tsx", "assets/images/icon.png", "app.json", "package.json", "package-lock.json", "babel.config.js", "metro.config.js", "eas.json", "brand-new-file.ts"]) {
+      expect(affectsApp(f)).toBe(true);
+    }
+  });
+
+  it("프리뷰를 만드는 쪽(ci.yml·preview-comment·eas-links)을 고치면 프리뷰를 돌려 확인한다", () => {
+    expect(appChanged([".github/workflows/ci.yml"])).toBe(true);
+    expect(appChanged(["scripts/preview-comment.mjs"])).toBe(true);
+    expect(appChanged(["scripts/eas-links.mjs"])).toBe(true);
   });
 
   it("리뷰 기준(.github/review·risk)의 .md 는 파이프라인에 영향이 있어 문서로 보지 않는다", () => {

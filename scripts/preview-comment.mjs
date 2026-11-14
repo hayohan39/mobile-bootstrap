@@ -7,6 +7,7 @@
 // 환경변수(ci.yml 의 preview job 이 넣는다):
 //   GITHUB_TOKEN, GITHUB_REPOSITORY, PR, SHA, RUN_URL
 //   NATIVE(true/false), NATIVE_SOURCES(쉼표 목록), WEB_URL, WEB(결과), UPDATE_URL, UPDATE(결과), BUILD_URL
+//   APP_PREVIEW(true/false — PR 에 app-preview 라벨이 있나. 없으면 앱 미리보기를 만들지 않는다)
 //
 // 리뷰·Risk Score 는 CI 가 끝난 뒤 PR 종합 코멘트로 따로 붙는다.
 import path from 'node:path';
@@ -37,17 +38,25 @@ export function nativeCell(native, sources = []) {
   return '—';
 }
 
+/**
+ * 앱 미리보기 칸: 네이티브 변경이면 새 빌드 필요, 라벨이 없으면 꺼짐(켜는 법), 아니면 결과.
+ * @param {{ pending?: boolean, native?: string, update?: string, updateUrl?: string, appPreview?: boolean }} cell
+ */
+export function appCell({ pending = false, native, update, updateUrl, appPreview = true }) {
+  if (native === 'true' && update !== 'success') return pending ? '⏳ 준비 중' : '🧱 새 빌드 필요';
+  if (!appPreview) return '💤 꺼짐 — `app-preview` 라벨을 달면 만듭니다';
+  return pending ? '⏳ 준비 중' : result(update, updateUrl, 'QR·열기');
+}
+
 export function renderPreview(input) {
-  const { pending = false, project, sha, native, sources = [], web, webUrl, update, updateUrl, runUrl, now = new Date() } = input;
+  const { pending = false, project, sha, native, sources = [], web, webUrl, update, updateUrl, appPreview = true, runUrl, now = new Date() } = input;
   const lines = [
     MARKER,
     `### 📱 프리뷰 · ${project} · \`${String(sha ?? '').slice(0, 7)}\``,
     '',
     '| 네이티브 변경 | 웹 미리보기 | 앱 미리보기 (개발 빌드) | 갱신 |',
     '| --- | --- | --- | --- |',
-    pending
-      ? `| ${nativeCell(native, sources)} | ⏳ 준비 중 | ⏳ 준비 중 | ${kst(now)} |`
-      : `| ${nativeCell(native, sources)} | ${result(web, webUrl, '열기')} | ${native === 'true' && update !== 'success' ? '🧱 새 빌드 필요' : result(update, updateUrl, 'QR·열기')} | ${kst(now)} |`,
+    `| ${nativeCell(native, sources)} | ${pending ? '⏳ 준비 중' : result(web, webUrl, '열기')} | ${appCell({ pending, native, update, updateUrl, appPreview })} | ${kst(now)} |`,
     '',
   ];
   if (!pending && native === 'true') {
@@ -100,6 +109,7 @@ if (isMain) {
       webUrl: /^https:\/\/[a-z0-9.-]+\.expo\.app\/?$/.test(e.WEB_URL ?? '') ? e.WEB_URL : '',
       update: e.UPDATE,
       updateUrl: /^https:\/\/expo\.dev\//.test(e.UPDATE_URL ?? '') ? e.UPDATE_URL : '',
+      appPreview: e.APP_PREVIEW !== 'false',
       runUrl: e.RUN_URL,
     });
     await upsert(e.PR, body);

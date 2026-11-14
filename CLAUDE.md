@@ -131,9 +131,11 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 ```
 PR 생성/push ─► ci.yml
                  ├ test     마이그레이션 append-only · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor·Expo 버전(경고만)
-                 ├ preview  fingerprint 비교(네이티브 변경?) · EAS Update(branch pr-<n>) · 웹 프리뷰 → PR 코멘트
+                 ├ preview  fingerprint 비교(네이티브 변경?) · 웹 프리뷰 · (`app-preview` 라벨이 있으면) EAS Update(branch pr-<n>) → PR 코멘트
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
-                 (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀)
+                 (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀.
+                  앱 밖(워크플로·scripts/·테스트·DB)만 바뀐 PR: 검사는 하고 프리뷰는 건너뜀 — scripts/ci-changes.mjs)
+PR 라벨 app-preview ─► app-preview.yml  마지막 CI 의 preview job 을 다시 돌려 앱 프리뷰(개발 빌드용 QR)를 만든다
 CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 (merge 를 막지 않음)
                  (AI 리뷰는 통과할 때까지, 통과 뒤에는 PR 당 1회 — `ai-reviewed` 라벨. 이후 push 는 규칙 스캔만 새로 하고 AI 평가를 이어 씀)
 PR 코멘트 @claude ─► claude-mention.yml  지시대로 수정
