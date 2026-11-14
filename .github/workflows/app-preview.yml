@@ -1,0 +1,54 @@
+name: App preview (label)
+
+# PR 에 `app-preview` 라벨을 달면 그 PR 의 마지막 CI 실행에서 preview job 만 다시 돌려 앱 프리뷰(EAS Update)를 만든다.
+# 앱 프리뷰는 개발 빌드를 설치한 폰에서 QR 로 그 PR 을 여는 용도라, 필요한 PR 에만 켠다(ci.yml 은 라벨이 없으면 웹 프리뷰만).
+# 라벨이 붙어 있는 동안에는 이후 push 마다 ci.yml 이 앱 프리뷰도 만든다.
+#
+# Actions 시간: 다른 라벨이면 job 이 건너뛰어져 0분. app-preview 라벨일 때 이 job 은 몇 초, 다시 도는 preview job 은 6~8분.
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  actions: write # CI 의 preview job 다시 돌리기
+  contents: read
+
+jobs:
+  rerun-preview:
+    if: >-
+      github.event.label.name == 'app-preview'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && !github.event.repository.is_template
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Re-run the preview job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&event=pull_request&per_page=1" \
+            --jq '.workflow_runs[0] | "\(.id) \(.status)"' || true)
+          id=${run%% *}
+          status=${run#* }
+          if [ -z "$id" ]; then
+            echo "이 커밋의 CI 실행이 아직 없습니다 — CI 의 preview job 이 라벨을 읽어 앱 프리뷰를 만듭니다."
+            exit 0
+          fi
+          if [ "$status" != completed ]; then
+            echo "CI 가 도는 중입니다 — preview job 이 시작할 때 라벨을 읽어 앱 프리뷰를 만듭니다."
+            exit 0
+          fi
+          jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '.jobs[] | "\(.name)\t\(.conclusion)\t\(.id)"')
+          test_result=$(printf '%s\n' "$jobs" | awk -F'\t' '$1 == "test" { print $2 }')
+          job=$(printf '%s\n' "$jobs" | awk -F'\t' '$1 == "preview" && $2 != "skipped" { print $3 }' | head -1)
+          if [ -z "$job" ]; then
+            if [ "$test_result" != success ]; then
+              echo "::notice::test 가 통과하지 않아($test_result) 프리뷰를 만들지 않았습니다. 고쳐서 push 하면 라벨이 붙어 있으니 앱 프리뷰도 만듭니다."
+            else
+              echo "::notice::이 PR 은 프리뷰 대상이 아닙니다(문서·도구만 바뀜). 앱 프리뷰를 만들지 않습니다."
+            fi
+            exit 0
+          fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/actions/jobs/$job/rerun" >/dev/null
+          echo "CI 실행 $id 의 preview job 을 다시 돌립니다."
