@@ -39,9 +39,15 @@ jobs:
             echo "CI 가 도는 중입니다 — preview job 이 시작할 때 라벨을 읽어 앱 프리뷰를 만듭니다."
             exit 0
           fi
-          job=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '.jobs[] | select(.name == "preview" and .conclusion != "skipped") | .id' | head -1)
+          jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '.jobs[] | "\(.name)\t\(.conclusion)\t\(.id)"')
+          test_result=$(printf '%s\n' "$jobs" | awk -F'\t' '$1 == "test" { print $2 }')
+          job=$(printf '%s\n' "$jobs" | awk -F'\t' '$1 == "preview" && $2 != "skipped" { print $3 }' | head -1)
           if [ -z "$job" ]; then
-            echo "::notice::이 PR 은 프리뷰 대상이 아닙니다(문서·도구만 바뀜). 앱 프리뷰를 만들지 않습니다."
+            if [ "$test_result" != success ]; then
+              echo "::notice::test 가 통과하지 않아($test_result) 프리뷰를 만들지 않았습니다. 고쳐서 push 하면 라벨이 붙어 있으니 앱 프리뷰도 만듭니다."
+            else
+              echo "::notice::이 PR 은 프리뷰 대상이 아닙니다(문서·도구만 바뀜). 앱 프리뷰를 만들지 않습니다."
+            fi
             exit 0
           fi
           gh api -X POST "repos/$GITHUB_REPOSITORY/actions/jobs/$job/rerun" >/dev/null
