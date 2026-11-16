@@ -20,7 +20,9 @@ describe("maestro testIDs", () => {
     const flows = filesUnder(path.join(root, ".maestro"), /\.ya?ml$/);
     // id: "x" · id: 'x' · id: x · { id: "x" } 모두(따옴표 없는 값은 공백·쉼표·} ·주석 전까지)
     const ID = /(?:^|[\s{,])id:\s*(?:"([^"]+)"|'([^']+)'|([^\s#"',}]+))/gm;
-    const ids = new Set(flows.flatMap((f) => [...readFileSync(f, "utf8").matchAll(ID)].map((m) => (m[1] ?? m[2] ?? m[3])!)));
+    // YAML 주석(# 부터 줄 끝, 줄 처음이거나 앞이 공백일 때)은 먼저 지운다 — 주석 처리한 id 는 검사하지 않는다.
+    const withoutComments = (text: string) => text.replace(/(^|\s)#.*$/gm, "$1");
+    const ids = new Set(flows.flatMap((f) => [...withoutComments(readFileSync(f, "utf8")).matchAll(ID)].map((m) => (m[1] ?? m[2] ?? m[3])!)));
     expect(ids.size).toBeGreaterThan(0);
     const source = filesUnder(path.join(root, "src"), /\.tsx?$/).map((f) => readFileSync(f, "utf8")).join("\n");
     const missing = [...ids].filter((id) => !source.includes(`testID="${id}"`) && !source.includes(`testID={\`${id}`));
