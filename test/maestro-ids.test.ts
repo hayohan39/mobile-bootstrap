@@ -15,9 +15,12 @@ function filesUnder(dir: string, ext: RegExp): string[] {
 }
 
 describe("maestro testIDs", () => {
+  // 한계: testID 는 소스 글자로 찾으므로 주석·문자열 안의 testID 도 "있다" 로 본다(잘못 통과하는 쪽). 실제 화면 확인은 스테이징 e2e 가 한다.
   it("e2e 흐름이 찾는 id 는 모두 앱 코드의 testID 다", () => {
     const flows = filesUnder(path.join(root, ".maestro"), /\.ya?ml$/);
-    const ids = new Set(flows.flatMap((f) => [...readFileSync(f, "utf8").matchAll(/^\s*id:\s*"([^"]+)"/gm)].map((m) => m[1]!)));
+    // id: "x" · id: 'x' · id: x · { id: "x" } 모두(따옴표 없는 값은 공백·쉼표·} ·주석 전까지)
+    const ID = /(?:^|[\s{,])id:\s*(?:"([^"]+)"|'([^']+)'|([^\s#"',}]+))/gm;
+    const ids = new Set(flows.flatMap((f) => [...readFileSync(f, "utf8").matchAll(ID)].map((m) => (m[1] ?? m[2] ?? m[3])!)));
     expect(ids.size).toBeGreaterThan(0);
     const source = filesUnder(path.join(root, "src"), /\.tsx?$/).map((f) => readFileSync(f, "utf8")).join("\n");
     const missing = [...ids].filter((id) => !source.includes(`testID="${id}"`) && !source.includes(`testID={\`${id}`));
