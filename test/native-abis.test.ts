@@ -67,7 +67,11 @@ describe("미리 빌드된 Expo 모듈의 ABI", () => {
     // autolinking 은 공통 설정 위에 android 설정을 덮어쓴다(expo-modules-autolinking 의 parsePackageJsonOptions).
     const patterns = (autolinking?.android?.buildFromSource ?? autolinking?.buildFromSource ?? []).map((p) => new RegExp(`^(?:${p})$`));
     const modules = precompiledModules();
-    expect(modules.length).toBeGreaterThan(0); // 하나도 못 찾으면 AAR 위치 규칙이 바뀐 것 — 이 테스트가 헛돌지 않게
+    // 하나도 못 찾으면 이 테스트가 헛돈다 — ABI 문제가 아니라 찾는 방법을 고쳐야 한다는 뜻이다.
+    expect(
+      modules.length,
+      "node_modules 에서 미리 빌드된 Expo 모듈 AAR(expo-module.config.json 의 android.publication)을 하나도 못 찾았다. npm ci 를 했는지, Expo 가 배포 방식을 바꿨는지 보고 precompiledModules() 를 고친다.",
+    ).toBeGreaterThan(0);
     const broken = modules
       .filter((m) => m.abis.length > 0) // .so 가 없는 AAR 은 ABI 와 상관없다
       .filter((m) => !patterns.some((p) => p.test(m.name)))
