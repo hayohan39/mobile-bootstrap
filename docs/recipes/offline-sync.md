@@ -9,6 +9,9 @@
 ## 로컬 DB: expo-sqlite
 
 - 🤖 네이티브 PR: `npx expo install expo-sqlite` — 새 빌드.
+  **같은 PR 에서 `package.json` 에 `"expo": { "autolinking": { "android": { "buildFromSource": ["expo-sqlite"] } } }` 를 넣는다.**
+  Expo 가 미리 빌드해 둔 expo-sqlite(SDK 57)에는 arm64 용 `.so` 만 있어서, 그대로 두면 32비트 폰·x86 기기·에뮬레이터 e2e 에서
+  `libexpo-sqlite.so not found` 로 DB 를 못 연다. `test/native-abis.test.ts` 가 빠뜨리면 PR 에서 잡는다.
 - 스키마 버전은 `PRAGMA user_version` 으로 관리하고, 앱 시작 때 순서대로 올린다:
 
 ```ts

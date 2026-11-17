@@ -62,7 +62,9 @@ runs:
         arch: x86_64
         target: google_apis
         disable-animations: true
-        script: adb install -r android/app/build/outputs/apk/release/app-release.apk && maestro test -e APP_ID=${{ steps.apk.outputs.app_id }} --format junit --output maestro-report.xml .maestro
+        # 실패하면 그 순간의 화면 요소(resource-id·텍스트)와 앱 로그를 job 로그에 남긴다 — 아티팩트 없이도 원인을 본다.
+        # (emulator-runner 는 script 를 줄마다 따로 실행하므로 한 줄로 쓴다)
+        script: adb install -r android/app/build/outputs/apk/release/app-release.apk && (maestro test -e APP_ID=${{ steps.apk.outputs.app_id }} --format junit --output maestro-report.xml .maestro || (echo "::group::e2e 실패 진단 — 화면 요소(maestro hierarchy)"; maestro hierarchy | grep -E '"(text|resource-id|accessibilityText|bounds)"' | grep -vE '"",?$' | head -n 400; echo "::endgroup::"; echo "::group::e2e 실패 진단 — 앱 로그(logcat)"; adb logcat -d -v brief ReactNativeJS:V ReactNative:V AndroidRuntime:E ExpoModulesCore:V expo:V '*:S' | tail -n 300; echo "::endgroup::"; exit 1))
 
     - uses: actions/upload-artifact@v7
       if: failure()
