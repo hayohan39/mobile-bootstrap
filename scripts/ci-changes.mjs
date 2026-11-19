@@ -2,8 +2,10 @@
 // 바뀐 파일이 문서뿐인지, 앱(번들·앱 설정)에 영향이 있는지 판정해 Actions 시간을 아낀다.
 //   code=false  문서만 — 앱 검사·프리뷰·배포를 건너뛴다.
 //   app=false   문서·검사·배포 도구만(워크플로, scripts/, 테스트, DB) — 검사는 하지만 PR 프리뷰는 만들지 않는다(앞 PR 과 같은 화면).
+//   db=false    DB(마이그레이션·DB 테스트·DB 도구)가 그대로 — PR CI 는 로컬 Supabase DB 를 띄우지 않고 DB 테스트를 건너뛴다
+//               (띄우는 데만 1분 넘게 걸린다). 스테이징 검사(deploy.yml)는 항상 DB 테스트까지 돈다.
 //
-//   node scripts/ci-changes.mjs --base <커밋> [--head HEAD]   → code=true|false, app=true|false
+//   node scripts/ci-changes.mjs --base <커밋> [--head HEAD]   → code=true|false, app=true|false, db=true|false
 //
 // base 를 모르면(첫 push, 강제 push 로 사라진 커밋) 앱 코드가 바뀐 것으로 본다 — 건너뛰지 않는 쪽이 안전하다.
 // GitHub Actions 에서는 $GITHUB_OUTPUT 에도 쓴다.
@@ -50,6 +52,24 @@ export function appChanged(files) {
   return files.some(affectsApp);
 }
 
+// DB 테스트 결과를 바꿀 수 있는 것: 스키마·Edge Function, DB 테스트와 그 설정, DB 도구, 의존성(pg 드라이버 등), 이 판정과 CI 자체.
+// 앱 코드(src/)는 DB 를 바꾸지 않는다 — 앱이 쓰는 이름을 지우는 쪽은 마이그레이션이라 여기서 잡힌다.
+const DB = [
+  /^supabase\//,
+  /^test\/db\//,
+  /^scripts\/(db|ci-changes)\.mjs$/,
+  /^vitest\.config\.[cm]?[jt]s$/,
+  /^package(-lock)?\.json$/,
+  /^\.github\/workflows\/ci\.yml$/,
+];
+
+export const affectsDb = (file) => DB.some((re) => re.test(file)) && !isDocs(file);
+
+/** 바뀐 파일 목록 → DB 테스트를 다시 돌려야 하나. */
+export function dbChanged(files) {
+  return files.some(affectsDb);
+}
+
 /** base...head 에서 바뀐 경로. 이름 바꾸기는 옛 경로와 새 경로를 둘 다 낸다(assets/ → docs/ 로 옮긴 파일을 문서로 보지 않게). */
 export function changedFiles(base, head = 'HEAD', cwd = process.cwd()) {
   const out = execFileSync('git', ['diff', '--name-only', '--no-renames', `${base}...${head}`], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
@@ -63,11 +83,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const head = argv.includes('--head') ? arg('head') : 'HEAD';
   let code = true;
   let app = true;
+  let db = true;
   if (base && !/^0+$/.test(base)) {
     try {
       const files = changedFiles(base, head);
       code = codeChanged(files);
       app = appChanged(files);
+      db = dbChanged(files);
       console.log(`바뀐 파일 ${files.length}개 — ${!code ? '문서만' : app ? '앱 코드 포함' : '앱 밖(도구·테스트·DB)만'}`);
     } catch {
       console.log(`base ${base.slice(0, 7)} 를 찾지 못했습니다 — 앱 코드가 바뀐 것으로 봅니다.`);
@@ -75,5 +97,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   console.log(`code=${code}`);
   console.log(`app=${app}`);
-  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `code=${code}\napp=${app}\n`, { flag: 'a' });
+  console.log(`db=${db}`);
+  if (process.env.GITHUB_OUTPUT) writeFileSync(process.env.GITHUB_OUTPUT, `code=${code}\napp=${app}\ndb=${db}\n`, { flag: 'a' });
 }

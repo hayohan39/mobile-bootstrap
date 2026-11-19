@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { affectsApp, appChanged, changedFiles, codeChanged, isDocs } from "../scripts/ci-changes.mjs";
+import { affectsApp, affectsDb, appChanged, changedFiles, codeChanged, dbChanged, isDocs } from "../scripts/ci-changes.mjs";
 
 describe("ci-changes", () => {
   it("문서만 바뀌면 앱 코드 변경이 아니다", () => {
@@ -37,6 +37,17 @@ describe("ci-changes", () => {
     expect(appChanged([".github/workflows/ci.yml"])).toBe(true);
     expect(appChanged(["scripts/preview-comment.mjs"])).toBe(true);
     expect(appChanged(["scripts/eas-links.mjs"])).toBe(true);
+  });
+
+  it("DB·DB 테스트·의존성·CI 가 바뀌면 DB 테스트를 돌린다", () => {
+    for (const f of ["supabase/migrations/20261020000000_x.sql", "supabase/functions/delete-account/index.ts", "test/db/auth.test.ts", "scripts/db.mjs", "scripts/ci-changes.mjs", "vitest.config.ts", "package.json", "package-lock.json", ".github/workflows/ci.yml"]) {
+      expect(affectsDb(f)).toBe(true);
+    }
+  });
+
+  it("앱 화면·다른 테스트·문서만 바뀌면 DB 테스트를 건너뛴다", () => {
+    expect(dbChanged(["src/app/index.tsx", "test/game/ads.test.ts", "app.json", "scripts/gh.mjs", ".github/workflows/deploy.yml", "supabase/functions/README.md"])).toBe(false);
+    expect(dbChanged([])).toBe(false);
   });
 
   it("리뷰 기준(.github/review·risk)의 .md 는 파이프라인에 영향이 있어 문서로 보지 않는다", () => {
