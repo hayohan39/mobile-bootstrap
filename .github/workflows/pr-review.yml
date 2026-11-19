@@ -6,6 +6,9 @@ name: PR review
 #   review  Claude 가 .github/risk/rubric.md 로 코드 리뷰 + factor 점수 (structured output)
 #           CI 가 통과했을 때만. 실패하면 auto-fix 가 고친 뒤 다시 온다.
 #   report  최종 Risk Score → PR 종합 코멘트 · risk:* 라벨 (merge 를 막지 않는다 — 판단은 사람이 코멘트를 보고 한다)
+#           AI 리뷰를 하지 않는 push(PR 당 1회 리뷰 뒤, CI 실패, draft)는 scan job 이 끝에서 바로 게시한다 — job 하나(1분 올림)를 아낀다.
+#           AI 리뷰를 하면 따로 job 으로: Claude 가 도는 review job 에는 쓰기 권한을 주지 않기 위해서다(PR 내용으로 Claude 를
+#           속여 코멘트·라벨을 바꾸게 하는 프롬프트 주입을 막는다). scan 은 main 의 코드만 실행하므로 report 와 같은 권한을 줘도 된다.
 #
 # workflow_run 은 항상 기본 브랜치(main)의 이 파일과 코드로 실행된다. PR 의 코드는 git 데이터로
 # 읽기만 하고 실행하지 않는다 → PR 이 자기 평가 규칙을 바꿔 통과할 수 없다.
@@ -40,7 +43,8 @@ jobs:
     permissions:
       contents: read
       actions: read
-      pull-requests: read
+      pull-requests: write # AI 리뷰가 없을 때 종합 코멘트 게시(report 와 같은 권한)
+      issues: write # risk:* 라벨
     outputs:
       pr: ${{ steps.pr.outputs.number }}
       sha: ${{ steps.pr.outputs.sha }}
@@ -161,8 +165,17 @@ jobs:
           echo "max_turns=$turns" >> "$GITHUB_OUTPUT"
           echo "AI 리뷰: $review ${why:+($why)} · 모델 $model"
 
+      # AI 리뷰를 하지 않으면 여기서 바로 게시한다(report job 과 같은 명령, 직전 AI 평가를 이어 씀).
+      - name: Publish summary and label (no AI review)
+        if: steps.pr.outputs.number != '' && steps.decide.outputs.review != 'true'
+        working-directory: main
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+          MODEL: ${{ steps.decide.outputs.model }}
+        run: node scripts/risk/cli.mjs report --dir ../.review --pr "$PR" --sha "$SHA" --model "$MODEL"
+
       - uses: actions/upload-artifact@v7
-        if: steps.pr.outputs.number != ''
+        if: steps.pr.outputs.number != '' && steps.decide.outputs.review == 'true'
         with:
           name: review-input
           path: .review/
@@ -235,9 +248,10 @@ jobs:
             --allowed-tools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git -C pr diff:*),Bash(git -C pr log:*),Bash(git -C pr show:*)"
             --json-schema '${{ steps.prompt.outputs.schema }}'
 
+  # AI 리뷰를 한 push 만. 리뷰가 실패해도(always) 규칙 기반 점수로 게시한다.
   report:
     needs: [scan, review]
-    if: always() && needs.scan.result == 'success' && needs.scan.outputs.pr != ''
+    if: always() && needs.scan.result == 'success' && needs.scan.outputs.review == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10 # 평소 1분
     permissions:

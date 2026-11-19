@@ -8,7 +8,8 @@
 - `./pr/` — 리뷰 대상 PR 의 head 체크아웃. 코드를 읽고 Grep 할 곳.
 - `./.review/pr.diff` — 이번 PR 의 전체 diff (lockfile 제외).
 - `./.review/facts.md` — 규칙 기반 스캔 결과: factor 별 최저 점수(floor)와 hard override.
-- `./.review/ci.json` — CI 결과 (test / fingerprint / preview job). `native` 가 "true" 면 새 바이너리가 필요한
+- `./.review/ci.json` — CI 결과 (test / fingerprint / preview). `fingerprint` 는 네이티브 변경 판정 — test job 의 step 이면
+  test 의 결과와 같다. `native` 가 "true" 면 새 바이너리가 필요한
   네이티브 변경이다(`nativeSources` 가 바뀐 요소).
 - `./.review/pr-body.md` — PR 본문. "예상 Risk" 는 작성자(세션)의 자기 평가다 — 참고만 하고 점수는 diff 로 따로 매긴다.
   자기 평가가 낮다는 것은 점수를 낮출 근거가 아니다.

@@ -137,7 +137,8 @@ export async function collectCi({ runId, metaDir }) {
   };
   const ci = {
     test: conclusion('test'),
-    fingerprint: conclusion('fingerprint'),
+    // 네이티브 변경 판정은 test job 의 step 이다(2026-11 전에 만든 프로젝트는 따로 fingerprint job).
+    fingerprint: jobList.some((j) => j.name === 'fingerprint') ? conclusion('fingerprint') : conclusion('test'),
     preview: conclusion('preview'),
     e2e: conclusion('e2e'),
     autofix: conclusion('Claude auto-fix'),
@@ -146,6 +147,7 @@ export async function collectCi({ runId, metaDir }) {
     webUrl: null,
     updateUrl: null,
     previewAt: null,
+    ok: false, // 아래에서 job 결과로 정한다
     runUrl: `${process.env.GITHUB_SERVER_URL ?? 'https://github.com'}/${repo()}/actions/runs/${runId}`,
   };
   // CI(PR 의 코드로 실행)가 남긴 값이므로 형식을 검증해서만 쓴다.

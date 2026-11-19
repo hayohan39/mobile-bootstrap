@@ -133,7 +133,9 @@ LOC 가 아니라 **몇 개의 실행 경로가 이 코드를 지나는가**로 
 - 프로덕션 로직이 바뀌었는데 테스트 변경이 없으면 높게 본다(규칙 스캔 floor 10).
 - 테스트를 지우거나 skip/only, `eslint-disable`·`@ts-ignore` 를 추가했으면 높게 본다.
 - **CI 결과를 근거로 쓴다**: lint·typecheck·vitest(로직·Supabase 로컬 DB 의 RLS)·jest(화면)·웹 export 스모크
-  (`test` job), 네이티브 변경 판정(`fingerprint` job), 웹·OTA 프리뷰(`preview`) — `.review/ci.json` 의 결과로 확인.
+  (`test` job), 네이티브 변경 판정(`test` job 의 fingerprint step, 옛 프로젝트는 `fingerprint` job), 웹·OTA 프리뷰(`preview`)
+  — `.review/ci.json` 의 결과로 확인. DB(`supabase/`·`test/db/`·DB 도구·의존성)를 건드리지 않은 PR 은 CI 에서 로컬 DB·RLS 테스트를
+  건너뛴다(스테이징 검사에서 돈다).
   CI 통과는 "깨지지 않았다" 의 근거이지 "바뀐 동작이 맞다" 의 근거는 아니다.
 - Android 에뮬레이터 e2e 는 PR 에서 기본으로 돌지 않는다(스테이징을 올릴 때 네이티브가 바뀌었으면 돈다).
   `.review/ci.json` 에 e2e 결과가 없으면 네이티브 변경은 merge 전에 기기에서 검증된 적이 없다고 보고 Testing 에 반영한다.
