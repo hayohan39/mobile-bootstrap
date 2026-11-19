@@ -136,11 +136,13 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 
 ```
 PR 생성/push ─► ci.yml
-                 ├ test     마이그레이션 append-only · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor·Expo 버전(경고만)
-                 ├ preview  fingerprint 비교(네이티브 변경?) · 웹 프리뷰 · (`app-preview` 라벨이 있으면) EAS Update(branch pr-<n>) → PR 코멘트
+                 ├ test     마이그레이션 append-only · fingerprint 비교(네이티브 변경?) · lint · typecheck · vitest(+로컬 Supabase DB·RLS) · jest · 웹 export · Playwright · expo-doctor·Expo 버전(경고만)
+                 ├ preview  웹 프리뷰 · (`app-preview` 라벨이 있으면) EAS Update(branch pr-<n>) → PR 코멘트
                  └ autofix  실패하면 Claude 가 고쳐서 [claude-autofix] 커밋 (PR 당 최대 3회)
                  (문서만 바뀐 PR: test 가 바로 성공으로 끝나고 나머지는 건너뜀.
-                  앱 밖(워크플로·scripts/·테스트·DB)만 바뀐 PR: 검사는 하고 프리뷰는 건너뜀 — scripts/ci-changes.mjs)
+                  앱 밖(워크플로·scripts/·테스트·DB)만 바뀐 PR: 검사는 하고 프리뷰는 건너뜀.
+                  DB(supabase/·test/db/·의존성)가 그대로인 PR: 로컬 DB·DB 테스트를 건너뜀(스테이징 검사에서 돎) — scripts/ci-changes.mjs.
+                  node_modules 는 lockfile 키로 캐시)
 PR 라벨 app-preview ─► app-preview.yml  마지막 CI 의 preview job 을 다시 돌려 앱 프리뷰(개발 빌드용 QR)를 만든다
 CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 (merge 를 막지 않음)
                  (AI 리뷰는 통과할 때까지, 통과 뒤에는 PR 당 1회 — `ai-reviewed` 라벨. 이후 push 는 규칙 스캔만 새로 하고 AI 평가를 이어 씀)
@@ -154,7 +156,7 @@ merge ─► (아무것도 돌지 않음 — main 에 쌓기만)
 매일 ─► rollout-monitor.yml  Sentry 오류율로 OTA 롤아웃을 올리거나 멈추고 이슈로 알림
                               (진행 중인 롤아웃이 없으면 스스로 꺼짐 → release.yml 이 OTA 를 낼 때 다시 켬)
 수동 ─► rollback.yml  production OTA 를 직전 업데이트로 되돌리기
-PR 닫힘 ─► preview-cleanup.yml  EAS Update 의 pr-<n> 브랜치 정리
+PR 닫힘 ─► preview-cleanup.yml  (`app-preview` 라벨이 있던 PR 만) EAS Update 의 pr-<n> 브랜치 정리
 ```
 
 - 워크플로를 고칠 때는 그 이유를 PR 에 적는다. 시크릿 값을 로그에 찍지 않는다.
