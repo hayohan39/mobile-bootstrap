@@ -5,8 +5,15 @@ name: e2e (manual)
 # 쓰는 곳: merge 전에 위험한 네이티브 변경을 기기에서 미리 확인할 때, 그리고 템플릿 리포지토리의 SDK 업그레이드 PR
 # (템플릿은 스테이징이 없다). 평소의 e2e 는 스테이징을 올릴 때(deploy.yml) 네이티브가 바뀌었으면 돈다.
 # 결과는 PR 체크에 붙지 않는다(실행 결과·실패 시 maestro-report 아티팩트로 본다). 빌드+에뮬레이터 20~60분.
+# 흐름(.maestro/)만 고쳐 다시 돌릴 때: dispatch e2e.yml --ref <브랜치> apk_from=<앞 실행 번호> — 앞 실행의 APK 로 약 5분.
+# (그 사이 앱 파일이 바뀌었으면 경고하고 새로 빌드한다 — scripts/e2e-apk.mjs)
 on:
   workflow_dispatch:
+    inputs:
+      apk_from:
+        description: "다시 쓸 APK 의 실행 번호(run id) — 흐름만 고쳤을 때. 비우면 새로 빌드"
+        type: string
+        default: ""
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -22,10 +29,15 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read # apk_from 실행의 APK 아티팩트 받기
     env:
       EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # APK 재사용 판정(scripts/e2e-apk.mjs)이 APK 커밋과 비교한다
 
       - uses: actions/setup-node@v7
         with:
@@ -36,3 +48,5 @@ jobs:
         run: npm ci
 
       - uses: ./.github/actions/android-e2e
+        with:
+          apk-from: ${{ inputs.apk_from }}
