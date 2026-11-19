@@ -29,8 +29,8 @@
   로 에뮬레이터 e2e 를 돌려 본다(공개 리포라 Actions 시간이 들지 않는다).
 - `preview`, `app-preview.yml`, `deploy.yml`, `release.yml`, `rollback.yml`, `rollout-monitor.yml`, `preview-cleanup.yml` 은
   `github.event.repository.is_template` 으로 건너뛴다.
-- `pr-review.yml` 은 템플릿 PR 에서도 돈다. main 에 있는 버전이 실행되므로 이 파일이나
-  `scripts/risk/` 를 바꾸는 PR 은 **바꾸기 전 규칙**으로 평가된다.
+- CI 뒤의 PR 리뷰(`pr-review.yml`)는 2026-11-19 에 없앴다. `scripts/risk/` 는 세션의 자기 평가(`cli.mjs scan`)에만 쓴다
+  (`report`·`ci` 명령은 되살릴 때를 위해 남겼다 — 워크플로가 부르지 않는다).
 
 ## Expo SDK 를 올릴 때 (1년에 2~3번)
 

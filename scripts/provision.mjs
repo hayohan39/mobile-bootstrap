@@ -163,16 +163,11 @@ const setVariable = (repo, key, value) => {
   console.log(`  variable ${key}=${value}`);
 };
 
+// risk:* 라벨은 PR 리뷰(pr-review.yml)를 없애며 더 만들지 않는다(2026-11-19). 이미 있는 라벨은 옛 PR 에 남아 있어 지우지 않는다.
 const LABELS = [
-  ['risk:low', '2da44e', 'Risk Score LOW'],
-  ['risk:medium', 'd4a72c', 'Risk Score MEDIUM'],
-  ['risk:high', 'e16f24', 'Risk Score HIGH'],
-  ['risk:very-high', 'cf222e', 'Risk Score VERY HIGH'],
-  ['risk:critical', '6e0b0b', 'Risk Score CRITICAL'],
   ['no-autofix', 'bfdadc', 'CI 실패 시 Claude auto-fix 끄기'],
 ];
 // 파이프라인이 쓰지 않는 라벨: GitHub 기본 라벨(이슈·PR 에 쓰이면 남김), Dependabot 이 만든 것, 예전 파이프라인의 것(merge 게이트·PR e2e·CI 품질 리뷰).
-// ai-reviewed 는 PR 리뷰가 필요할 때 만든다.
 const DEFAULT_LABELS = [
   'bug', 'documentation', 'duplicate', 'enhancement', 'good first issue', 'help wanted', 'invalid', 'question',
   'wontfix', 'accessibility',

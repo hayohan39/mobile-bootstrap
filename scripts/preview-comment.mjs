@@ -9,7 +9,7 @@
 //   NATIVE(true/false), NATIVE_SOURCES(쉼표 목록), WEB_URL, WEB(결과), UPDATE_URL, UPDATE(결과), BUILD_URL
 //   APP_PREVIEW(true/false — PR 에 app-preview 라벨이 있나. 없으면 앱 미리보기를 만들지 않는다)
 //
-// 리뷰·Risk Score 는 CI 가 끝난 뒤 PR 종합 코멘트로 따로 붙는다.
+// Risk 평가는 PR 본문의 "예상 Risk"(세션의 자기 평가)에 있다.
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -66,8 +66,17 @@ export function renderPreview(input) {
     lines.push('앱 미리보기는 **개발 빌드**(development profile)를 설치한 폰에서 QR 로 엽니다. 웹 미리보기는 아무 브라우저에서 열립니다.');
     lines.push('');
   }
-  lines.push([runUrl ? `[실행 로그](${runUrl})` : null, '리뷰·Risk Score 는 CI 가 끝나면 종합 코멘트로 붙습니다'].filter(Boolean).join(' · '));
+  if (runUrl) lines.push(`[실행 로그](${runUrl})`);
   return lines.join('\n');
+}
+
+/** renderPreview 가 만든 코멘트에서(scripts/gh.mjs 의 pr-status 가 읽는다) 네이티브 변경 여부와 링크를 꺼낸다. */
+export function parsePreview(body) {
+  const sha = body.match(/· `([0-9a-f]{7})`/)?.[1] ?? null;
+  const native = body.includes('새 빌드 필요') ? 'true' : body.includes('⚡ 없음') ? 'false' : null;
+  const webUrl = body.match(/\[열기\]\((https:\/\/[^)\s]+)\)/)?.[1] ?? null;
+  const updateUrl = body.match(/\[QR·열기\]\((https:\/\/[^)\s]+)\)/)?.[1] ?? null;
+  return { sha, native, webUrl, updateUrl, pending: body.includes('⏳ 준비 중') };
 }
 
 async function github(apiPath, { method = 'GET', body } = {}) {

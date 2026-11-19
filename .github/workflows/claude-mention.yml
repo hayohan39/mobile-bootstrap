@@ -1,10 +1,10 @@
 name: Claude Mention
 
 # PR/이슈 코멘트에 @claude 를 붙이면 Claude 가 그 지시대로 작업한다.
-# PR 리뷰 중 "merge 대신 수정 요청" 을 할 때 쓴다. (쓰기 권한이 있는 사람만 부를 수 있다.)
+# PR 을 보다가 "merge 대신 수정 요청" 을 할 때 쓴다. (쓰기 권한이 있는 사람만 부를 수 있다.)
 #
 # 도구는 허용 목록으로 제한한다: 라벨·PR 상태·리뷰를 바꾸는 gh 명령은 쓸 수 없다
-# (risk:* 라벨은 PR 리뷰만, merge 는 사람만 한다).
+# (merge 는 사람만 한다).
 on:
   issue_comment:
     types: [created]

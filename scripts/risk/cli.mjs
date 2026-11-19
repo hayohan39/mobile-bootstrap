@@ -1,4 +1,5 @@
-// Risk Score CLI. pr-review.yml 이 부른다(로컬에서 scan 만 따로 돌려 볼 수도 있다).
+// Risk Score CLI. 세션이 PR 전에 scan 으로 자기 평가의 최저치를 본다.
+// (ci·report 는 CI 뒤 PR 리뷰 pr-review.yml 이 부르던 명령 — 2026-11-19 그 워크플로를 없앴고, 되살릴 때를 위해 남긴다.)
 //
 //   node scripts/risk/cli.mjs scan --base origin/main --head HEAD [--fingerprint fingerprint.json] --out .review
 //       diff 를 읽어 .review/facts.json, facts.md, pr.diff 를 만든다. (git 만 필요)

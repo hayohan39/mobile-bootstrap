@@ -48,7 +48,7 @@ https://github.com/apps/claude → Configure → Repository access → **All rep
 | 이름 | 필수 | 용도 | 발급 |
 | --- | --- | --- | --- |
 | `BOOTSTRAP_PAT` | ✅ | 새 리포지토리 생성, 시크릿/변수/라벨/브랜치 규칙, 초기화 push | **classic** PAT, 스코프 `repo` + `workflow` — https://github.com/settings/tokens/new |
-| `ANTHROPIC_API_KEY` | ✅* | Actions 안의 Claude (리뷰·Risk, auto-fix, @claude) | https://console.anthropic.com/settings/keys |
+| `ANTHROPIC_API_KEY` | ✅* | Actions 안의 Claude (auto-fix, @claude) | https://console.anthropic.com/settings/keys |
 | `CLAUDE_CODE_OAUTH_TOKEN` | * | 위와 같음, 구독 사용량으로 | 터미널에서 `claude setup-token` |
 | `EXPO_TOKEN` | ✅ | EAS 프로젝트 연결·빌드·OTA·제출 | 3번 |
 | `SUPABASE_ACCESS_TOKEN` | ✅ | Supabase 프로젝트 생성, Edge Function 배포 | 4번 |
@@ -71,11 +71,9 @@ https://github.com/apps/claude → Configure → Repository access → **All rep
 | `SENTRY_ORG` | | — | Sentry 조직 slug (프로젝트마다 `SENTRY_PROJECT` 는 따로) |
 | `EAS_CLI_VERSION` | | `latest` | 워크플로가 설치하는 eas-cli 버전(문제 생기면 고정) |
 | `CLAUDE_MODEL` | | `claude-sonnet-5-5` | auto-fix · @claude |
-| `CLAUDE_REVIEW_MODEL` | | `claude-sonnet-5-5` | PR 리뷰·Risk (규칙 스캔이 HIGH 미만) |
-| `CLAUDE_REVIEW_MODEL_HIGH` | | `claude-opus-5-5` | PR 리뷰·Risk (규칙 스캔이 HIGH 이상) |
 
 프로젝트별 변수(새 프로젝트 쪽에서 바꿈): `EAS_PLATFORMS`(`android` → Apple 계정 연결 후 `all`), `SENTRY_PROJECT`,
-`AUTOFIX_MAX_ATTEMPTS`(3), `CLAUDE_REVIEW`(`false` 면 끔), `CLAUDE_REVIEW_EVERY_PUSH`(`true` 면 AI 리뷰를 push 마다 — 기본은 PR 당 1회),
+`AUTOFIX_MAX_ATTEMPTS`(3),
 `ROLLOUT_HALT_BELOW`(0.99)·`ROLLOUT_ADVANCE_ABOVE`(0.995)·`ROLLOUT_MIN_SESSIONS`(30).
 
 ## 7. (선택) 클라우드 세션에서 EAS·Supabase 에 직접 접속하기
@@ -99,7 +97,7 @@ claude.ai/code 에서 mobile-bootstrap 으로 세션을 열고 "테스트용 앱
 1. Actions 의 New project 가 초록, 요약에 Supabase·EAS 연결 success
 2. 새 리포지토리의 Deploy (staging) 가 초록 — "🧱 새 스테이징 빌드" (EAS 무료 큐는 수십 분)
 3. 빌드가 끝나면 EAS 링크에서 **APK 를 Android 폰에 설치** → 앱 정보 화면에 채널 `staging`, 백엔드 "연결됨"
-4. 화면 문구만 바꾸는 PR → CI · PR 종합 코멘트(Risk) · 📱 프리뷰(⚡ OTA, 웹 링크) → merge → "📦 OTA" → 앱을 다시 열면 반영
+4. 화면 문구만 바꾸는 PR → CI · 📱 프리뷰(⚡ OTA, 웹 링크) → merge → "📦 OTA" → 앱을 다시 열면 반영
 5. `release.yml kind=ota` 는 프로덕션 빌드가 있어야 한다 — 스토어 계정 전에는 여기까지가 확인 범위
 
 확인 후 지우려면: GitHub 리포지토리, Supabase 프로젝트, expo.dev 프로젝트를 각각 삭제.

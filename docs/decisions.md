@@ -40,7 +40,7 @@ Risk Score 의 Compatibility 판단에 쓰인다. 이 앱의 DB·RPC·Edge Funct
 
 - 결정: Expo(React Native) + Expo Router + TypeScript, EAS Build/Submit/Update(클라우드 빌드·스토어 제출·OTA),
   Supabase(Postgres + RLS, Auth, Storage, Realtime, Edge Functions), Sentry(오류), GitHub Actions(CI/CD) +
-  Claude(리뷰·Risk Score·auto-fix)
+  Claude(auto-fix·@claude)
 - 이유: mobile-bootstrap 의 고정 스택. Mac 없이 Linux(클라우드 세션·GitHub Actions)만으로 iOS 까지 빌드·제출·OTA 가
   되는 유일한 1st-party 경로. 근거와 대안 비교는 템플릿의 `docs/bootstrap/STACK.md`.
 - 비용(2026-10 조사 기준 — 요금표에서 재확인): Expo 무료(월 Android 15 + iOS 15 빌드, OTA 월 1,000 MAU) → 필요 시 Starter $19/월.
@@ -51,4 +51,7 @@ Risk Score 의 Compatibility 판단에 쓰인다. 이 앱의 DB·RPC·Edge Funct
   (2026-10-27 변경: PR 의 `e2e` 라벨과 CI 품질 리뷰(refine)를 없앴다 — e2e 는 스테이징·수동 `e2e.yml`, 품질 점검은 push 전 세션.)
   (2026-11-13 변경: PR CI 의 Expo 버전 검사(`expo install --check`)는 경고만 — Expo 가 며칠마다 SDK 패치를 내서 모든 PR 이 막혔다.
   스테이징(`deploy.yml`)의 같은 검사는 그대로 막는다. Playwright 를 설치하는 job 은 `ubuntu-24.04` 로 고정 — `ubuntu-latest`(26)에서 apt 실패.)
+  (2026-11-19 변경: CI 뒤의 AI 리뷰·Risk Score(`pr-review.yml`)를 없앴다 — PR push 마다 2~4분, 두 프로젝트 합계 Actions 의 약 18%.
+  세션이 push 전에 테스트(`npm run check`)·품질·정확성 점검과 Risk 자기 평가(규칙 스캔 + rubric)를 하고 PR 본문에 쓴다.
+  잃는 것: 작성자와 맹점을 공유하지 않는 독립 리뷰. 되살리려면 그 변경을 revert.)
 - 되돌리는 법: OTA = rollback 워크플로, 스토어 빌드 = 롤아웃 중단 + 핫픽스(`docs/runbook.md`).

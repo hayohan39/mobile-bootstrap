@@ -1,8 +1,11 @@
 # Risk Score Rubric (mobile)
 
-PR 마다 CI 가 끝나면 `pr-review.yml` 이 이 기준으로 Risk Score 를 낸다.
-AI 리뷰어는 이 문서를 처음부터 끝까지 읽고 평가한다. 사람은 PR 종합 코멘트의 점수와 근거를 보고
-merge 할지, 더 고칠지 정한다.
+세션이 PR 을 올리기 전에 이 기준으로 Risk 를 스스로 매겨 PR 본문 **예상 Risk** 에 쓴다(`node scripts/risk/cli.mjs scan` 이
+규칙 기반 최저치). 사람은 그 등급과 근거를 보고 merge 할지, 더 고칠지 정한다.
+
+> CI 뒤의 독립 AI 리뷰·PR 종합 코멘트(`pr-review.yml`)는 2026-11-19 제거했다(Actions 사용량 — `docs/decisions.md`).
+> 아래의 "AI 리뷰", "종합 코멘트", `.review/ci.json` 은 그 워크플로가 있던 때의 표현이다. 지금은 같은 기준을 세션이 스스로 적용하고,
+> CI 결과는 PR 체크와 프리뷰 코멘트에서 본다. 되살리려면 그 PR 을 revert 한다.
 
 > 이 파일, `.github/risk/*`, `scripts/risk/*` 를 바꾸는 PR 은 "리스크 평가 자체의 변경" 으로
 > 최소 VERY HIGH 다. 평가는 항상 **main 의 규칙**으로 하므로 PR 이 자기 기준을 바꿔 통과할 수 없다.
@@ -262,6 +265,6 @@ PR 종합 코멘트(github-actions 봇) 한 개에 모인다:
 
 ## 9. 보정
 
-점수가 실제 결과와 맞는지 주기적으로 본다: `node scripts/gh.mjs risk-history` 로 최근 merge 된 PR 의
+점수가 실제 결과와 맞는지 주기적으로 본다: 최근 merge 된 PR 본문의 예상 Risk
 등급과 배포 결과(스테이징 성공 / 실패, 출시 후 롤백·롤아웃 중단)를 나란히 본다. LOW 인데 롤백된 PR 이 있으면
 규칙(`.github/risk/config.json`, `scripts/risk/scan.mjs`)이나 이 문서를 고친다 — 그 PR 은 VERY HIGH 로 평가된다.

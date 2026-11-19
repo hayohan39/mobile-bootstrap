@@ -3,7 +3,8 @@
 mobile-bootstrap 이 왜 이렇게 생겼는지. production-bootstrap(웹)의 [DESIGN.md](https://github.com/hayohan39/production-bootstrap/blob/main/docs/bootstrap/DESIGN.md)
 에서 그대로 가져온 결정(클라우드 세션의 GitHub 프록시, REST 헬퍼, auto-fix 토큰, Risk Score 의 두 겹 평가와
 main 의 코드로 평가하기)은 반복하지 않고 **모바일이라서 달라진 것**만 쓴다.
-merge 게이트(risk-gate)는 2026-10 에 없앴다 — 필수 체크는 `test` 하나, Risk 는 PR 종합 코멘트로만 보여 준다.
+merge 게이트(risk-gate)는 2026-10 에 없앴다 — 필수 체크는 `test` 하나.
+CI 뒤의 AI 리뷰·Risk Score(`pr-review.yml`)도 2026-11-19 에 없앴다(Actions 사용량 약 18%) — 리뷰와 Risk 자기 평가는 push 전 세션이 하고 PR 본문에 쓴다.
 
 ## 1. 세션은 Linux 이고 기기가 없다 → Expo + EAS
 
@@ -31,7 +32,7 @@ Docker 데몬이 없어 로컬 Supabase 는 못 띄운다 → 세션의 일반 P
 - `app.json` 의 `runtimeVersion: { policy: "fingerprint" }` — 네이티브에 영향을 주는 모든 것(네이티브 패키지, app.json,
   config plugin, SDK)의 해시가 runtimeVersion 이 된다. OTA 업데이트는 같은 runtimeVersion 의 바이너리에만 간다.
   사람이 버전 규칙을 지키지 않아도 "호환되지 않는 JS 가 옛 바이너리에 가서 크래시" 가 구조적으로 막힌다.
-- CI 의 `fingerprint` job 이 base·head 를 비교해 **네이티브 변경 여부**를 PR 에 표시하고 Risk 에 넣는다(HIGH 이상).
+- CI 의 `test` job(Native change step)이 base·head 를 비교해 **네이티브 변경 여부**를 프리뷰 코멘트에 표시한다. 규칙 스캔은 네이티브 변경을 HIGH 이상으로 본다.
   비교는 네트워크 없이 `expo-updates runtimeversion:resolve` 로 한다.
 - 스테이징 배포는 "같은 fingerprint 의 스테이징 빌드가 있으면 OTA, 없으면 새 빌드" — 사람이 판단하지 않는다.
 
@@ -97,8 +98,8 @@ ci.yml(autofix)과 claude-mention.yml 의 순서:
    action 앞의 git 명령(`@claude` 가 PR 브랜치를 fetch 하는 것 등)은 이 토큰을 쓴다.
 3. action 이 시작하며 이 헤더를 지우고("Removing existing git authentication headers") 원격 주소에 App 토큰을 넣는다 → push 는 App 토큰.
 4. action 은 끝날 때 App 토큰을 폐기한다. 그 뒤 스텝은 git 원격 대신 API(`gh`, `GITHUB_TOKEN`)를 쓴다.
-5. App 토큰으로 push 한 커밋의 CI·PR 리뷰는 `claude[bot]` 이 시작한 실행이다. action 은 bot 이 시작한 실행을 기본으로 거부하므로
-   ci.yml(autofix)과 pr-review.yml 에 `allowed_bots: claude` 를 둔다(@claude 는 사람의 코멘트로만 시작하므로 두지 않는다).
+5. App 토큰으로 push 한 커밋의 CI 는 `claude[bot]` 이 시작한 실행이다. action 은 bot 이 시작한 실행을 기본으로 거부하므로
+   ci.yml(autofix)에 `allowed_bots: claude` 를 둔다(@claude 는 사람의 코멘트로만 시작하므로 두지 않는다).
 
 증상과 원인:
 - Claude 커밋(`[claude-autofix]`·`@claude`)에 체크가 하나도 안 붙는다 → push 가 `GITHUB_TOKEN` 으로 나갔다(2·3 이 깨짐).
