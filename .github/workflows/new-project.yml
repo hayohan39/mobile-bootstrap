@@ -132,8 +132,6 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
-          CLAUDE_REVIEW_MODEL: ${{ vars.CLAUDE_REVIEW_MODEL }}
-          CLAUDE_REVIEW_MODEL_HIGH: ${{ vars.CLAUDE_REVIEW_MODEL_HIGH }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           EAS_CLI_VERSION: ${{ vars.EAS_CLI_VERSION }}
         run: |
@@ -148,7 +146,7 @@ jobs:
           done
           echo "COPIED=${copied[*]:-없음}" >> "$GITHUB_ENV"
           echo "SKIPPED=${skipped[*]:-없음}" >> "$GITHUB_ENV"
-          for key in CLAUDE_MODEL CLAUDE_REVIEW_MODEL CLAUDE_REVIEW_MODEL_HIGH SENTRY_ORG EAS_CLI_VERSION; do
+          for key in CLAUDE_MODEL SENTRY_ORG EAS_CLI_VERSION; do
             if [ -n "${!key}" ]; then gh variable set "$key" -R "$TARGET" --body "${!key}"; fi
           done
 

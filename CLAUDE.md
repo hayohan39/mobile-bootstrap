@@ -11,7 +11,7 @@
 {{PROJECT_DESCRIPTION}}
 
 **스토어에 출시해 실제 사용자가 쓰는 Android·iOS 앱이다.** 리포지토리 주인(이하 "사용자")은 Claude 세션에서
-개발을 요청하고, GitHub 에서 PR 종합 코멘트(CI · 코드 리뷰 · Risk Score)를 보고 merge 할지 정한다.
+개발을 요청하고, GitHub 에서 PR(본문의 확인 내역·예상 Risk, CI 결과, 프리뷰)을 보고 merge 할지 정한다.
 merge 는 main 에 쌓기만 한다. **스테이징(내부 테스트 채널) 배포는 사용자가 "스테이징 올려줘" 라고 할 때** 여러 PR 을 모아 한 번에 하고,
 사용자에게 나가는 **출시(release)는 그 뒤 사용자의 별도 요청**으로 한다.
 
@@ -20,8 +20,8 @@ merge 는 main 에 쌓기만 한다. **스테이징(내부 테스트 채널) 배
 | 누가 | 무엇을 |
 | --- | --- |
 | 사용자 | 요청 · PR 판단(CRITICAL 포함) · **merge** · 폰에서 스테이징 확인 · **출시 지시** · 스토어 콘솔 작업(심사 제출 버튼, 스토어 정보, 계정·결제·키) |
-| Claude (세션) | 브랜치 → 구현 → 로컬 검증 → 커밋 → push → **PR 생성** → CI·리뷰·Risk 보고 → 지적 수정 → (요청 시) release 워크플로 실행·결과 보고 |
-| GitHub Actions | CI · auto-fix · PR 프리뷰(웹 + OTA) · AI 리뷰 + Risk Score · (요청 시) 스테이징: main 검사 → e2e(네이티브) → DB 마이그레이션 → OTA 또는 빌드 · 출시 · 롤아웃 감시 · 롤백 |
+| Claude (세션) | 브랜치 → 구현 → 로컬 검증 → 커밋 → push → **PR 생성** → CI·프리뷰 보고 → 지적 수정 → (요청 시) release 워크플로 실행·결과 보고 |
+| GitHub Actions | CI · auto-fix · PR 프리뷰(웹 + OTA) · (요청 시) 스테이징: main 검사 → e2e(네이티브) → DB 마이그레이션 → OTA 또는 빌드 · 출시 · 롤아웃 감시 · 롤백 |
 | EAS (Expo) | 클라우드 빌드(iOS 포함 — Mac 불필요) · 서명 키 보관 · 스토어 제출 · OTA 업데이트 배포 |
 
 ## 개발 요청을 받으면
@@ -39,21 +39,24 @@ merge 는 main 에 쌓기만 한다. **스테이징(내부 테스트 채널) 배
 4. **push 전에 diff 를 스스로 다듬는다** — CI 에는 품질 리뷰가 없어서 이 단계가 유일한 품질 점검이다.
    `.github/review/quality.md` 를 읽고 그 기준(덧붙임·재사용·단순화·일관성·빈틈)으로 `git diff origin/main...HEAD` 를 훑어
    바로 고칠 것은 고치고, 남길 것은 PR 본문에 적는다. 세션에 `/simplify` 스킬이 있으면 먼저 돌리고 표로 한 번 더 본다.
+   **CI 에는 AI 리뷰도 없다**(pr-review 는 2026-11-19 제거 — `docs/decisions.md`). 그래서 같은 diff 를 **정확성**으로도 본다:
+   세션에 `/code-review` 스킬이 있으면 돌리고, 없으면 `.github/risk/rubric.md` 의 factor(보안·호환·마이그레이션)를 따라 깨지는 조건을 찾는다.
+   찾은 것은 push 전에 고치고, 고치지 않을 것은 PR 본문에 이유와 함께 적는다.
    그리고 **반드시** `npm run check` (lint → typecheck → test → 웹 export → 웹 스모크) 를 통과시킨다.
    DB 를 건드렸으면 `npm test` 가 로컬 Postgres 에 마이그레이션을 적용하고 RLS 테스트까지 돈다(아래 참고).
 5. **예상 Risk 를 스스로 매긴다**: `node scripts/risk/cli.mjs scan --base origin/main --head HEAD`(규칙 기반 최저치)를 돌리고,
    `.github/risk/rubric.md` 의 factor 로 직접 평가해 PR 본문 **예상 Risk** 에 등급과 가장 큰 factor 두세 개를 쓴다.
    HIGH 이상이면 **롤백 계획**, VERY HIGH 이상이면 **배포 후 확인**까지 구체적으로 쓴다.
-   최종 점수는 CI 뒤 독립 AI 리뷰(PR 당 1회)가 낸다 — 작성자의 자기 평가는 맹점을 공유하므로 대신하지 못한다.
-   AI 리뷰가 더 높게 매기면 그 근거를 보고 롤백 계획·테스트를 보강한다.
+   이것이 PR 의 유일한 Risk 평가다(독립 AI 리뷰는 없다). 자기 평가는 맹점을 공유하므로 애매하면 높은 쪽으로 매기고,
+   확인하지 않은 것은 "확인하지 않음" 으로 쓴다 — 사용자는 이 칸을 보고 merge 를 정한다.
 6. 커밋 메시지는 Conventional Commits, 제목은 한국어 가능: `feat: 단어장 화면 추가`.
 7. push 후 **PR 을 만든다**. 본문은 `.github/pull_request_template.md` 형식으로 파일에 쓰고:
    `node scripts/gh.mjs pr-create --title "feat: ..." --body-file /tmp/pr.md`
    빈 섹션을 남기지 않는다. 사용자는 휴대폰으로 본다 — 첫 줄에서 무엇이 바뀌는지 알 수 있게.
-8. `node scripts/gh.mjs pr-watch` 로 CI 와 PR 리뷰(종합 코멘트)가 끝날 때까지 기다린 뒤 두세 줄로 보고한다:
-   CI 결과 · 리뷰 판정과 주요 지적 · **Risk 등급과 빠진 확인 사항** · **프리뷰(웹 링크, OTA 여부 또는 "새 빌드 필요")**.
+8. `node scripts/gh.mjs pr-watch` 로 CI 가 끝날 때까지 기다린 뒤 두세 줄로 보고한다:
+   CI 결과 · **예상 Risk 등급과 가장 큰 위험** · **프리뷰(웹 링크, OTA 여부 또는 "새 빌드 필요")**.
    merge 를 막는 게이트는 없다(필수 체크는 `test` 뿐). HIGH 이상이면 사용자가 무엇을 보고 merge 할지 분명히 적는다.
-   - 리뷰 finding(blocker/major)은 같은 브랜치에서 고쳐 push 한다. 고치지 않을 것은 이유를 PR 에 쓴다.
+   - CI 가 실패하면(autofix 가 못 고치면) 같은 브랜치에서 고쳐 push 한다.
 9. **merge 하지 않는다.** 사용자가 요청해도 "PR 에서 merge 버튼을 눌러 주세요" 라고 안내한다.
 
 PR 이 이미 열려 있는 브랜치에서 추가 요청을 받으면 같은 브랜치에 커밋을 더한다.
@@ -71,7 +74,7 @@ PR 이 이미 열려 있는 브랜치에서 추가 요청을 받으면 같은 �
 | 되돌리기 | `eas update` 롤백으로 즉시 | **불가.** 롤아웃 중단·핫픽스 빌드만 가능 |
 | 사용자 테스트 | 이미 설치한 스테이징 앱이 자동으로 받음 | 사용자가 새 스테이징 빌드를 설치해야 함 |
 
-PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네이티브 변경이면 PR 본문 "배포 영향" 에 **새 빌드 필요** 를 쓴다.
+PR 프리뷰 코멘트가 이 구분을 자동으로 보여 준다. 네이티브 변경이면 PR 본문 "배포 영향" 에 **새 빌드 필요** 를 쓴다.
 **OTA 로 앱의 핵심 목적을 바꾸지 않는다**(Apple 가이드라인 2.5.2/3.3.2) — 버그 수정·기능 개선은 괜찮다.
 
 ### Risk Score 를 대하는 태도
@@ -79,8 +82,8 @@ PR 프리뷰 코멘트와 Risk 가 이 구분을 자동으로 보여 준다. 네
 - 기준은 `.github/risk/rubric.md`. Risk 는 품질 점수가 아니라 "사용자 폰에서 잘못되면 얼마나 아픈가" 다.
 - **점수를 낮추려고 위험을 숨기지 않는다.** 스캐너를 피하려고 코드를 쪼개거나, 형식적인 테스트를 추가하거나,
   확인하지 않은 주장을 PR 본문에 쓰지 않는다. 위험은 작게 나누기, expand/contract, 테스트, 원격 킬스위치로 줄인다.
-- `risk:*`·`ai-reviewed` 라벨, PR 리뷰 상태는 **절대 건드리지 않는다**(리뷰를 건너뛰게 만드는 라벨이다). 위험을 받아들이고 merge 하는 것은 사람의 몫이다.
-- `.github/risk/*`, `scripts/risk/*`, `.github/workflows/pr-review.yml` 을 바꾸는 것은
+- 위험을 받아들이고 merge 하는 것은 사람의 몫이다. PR 리뷰 상태는 건드리지 않는다.
+- `.github/risk/*`, `scripts/risk/*` 를 바꾸는 것은
   평가 기준 자체를 바꾸는 일이다. 사용자가 명시적으로 요청했을 때만 하고, 별도 PR 로 한다.
 
 > **GitHub CLI 주의**: 클라우드 세션의 GitHub 프록시는 GraphQL 을 막는다. `gh pr create`,
@@ -131,7 +134,7 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 
 ## 개발 상황을 물으면
 
-`project-status` 스킬을 따른다. 열린 PR 과 각 CI·리뷰·**Risk**·네이티브 여부, 스테이징·프로덕션에 나간 것
+`project-status` 스킬을 따른다. 열린 PR 과 각 CI·**예상 Risk**·네이티브 여부, 스테이징·프로덕션에 나간 것
 (OTA 업데이트·빌드·롤아웃 %), 스토어 심사 상태(알 수 있으면), `docs/decisions.md` 의 미결 항목을 짧게 정리한다.
 
 ## 파이프라인 (건드리기 전에 이해할 것)
@@ -146,8 +149,7 @@ PR 생성/push ─► ci.yml
                   DB(supabase/·test/db/·의존성)가 그대로인 PR: 로컬 DB·DB 테스트를 건너뜀(스테이징 검사에서 돎) — scripts/ci-changes.mjs.
                   node_modules 는 lockfile 키로 캐시)
 PR 라벨 app-preview ─► app-preview.yml  마지막 CI 의 preview job 을 다시 돌려 앱 프리뷰(개발 빌드용 QR)를 만든다
-CI 완료 ─► pr-review.yml (main 의 코드로 실행)  규칙 스캔 → Claude 리뷰 + Risk → PR 종합 코멘트 · 라벨 (merge 를 막지 않음)
-                 (AI 리뷰는 통과할 때까지, 통과 뒤에는 PR 당 1회 — `ai-reviewed` 라벨. 이후 push 는 규칙 스캔만 새로 하고 AI 평가를 이어 씀)
+(PR 리뷰·Risk Score 워크플로는 없다 — 리뷰와 Risk 평가는 push 전 세션이 하고 PR 본문에 쓴다. 2026-11-19 제거)
 PR 코멘트 @claude ─► claude-mention.yml  지시대로 수정
 merge ─► (아무것도 돌지 않음 — main 에 쌓기만)
 요청 ─► deploy.yml (= 스테이징, "스테이징 올려줘")
@@ -263,7 +265,7 @@ npm run web             # 로컬 웹 개발 서버
 npm run db:new -- add_decks     # 새 마이그레이션
 npm run db:apply | db:status | db:reset   # 로컬 DB (TEST_DATABASE_URL)
 node scripts/risk/cli.mjs scan --base origin/main --head HEAD   # 예상 Risk (규칙 기반)
-node scripts/gh.mjs pr-list      # 열린 PR + CI + Risk (pr-create / pr-status / pr-watch / deploys / risk-history)
+node scripts/gh.mjs pr-list      # 열린 PR + CI (pr-create / pr-status / pr-watch / deploys)
 node scripts/gh.mjs dispatch release.yml kind=ota rollout=10      # 출시 (사용자 요청 시)
 node scripts/gh.mjs dispatch rollback.yml reason="..."            # OTA 롤백
 ```

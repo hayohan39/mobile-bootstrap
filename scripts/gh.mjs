@@ -7,9 +7,8 @@
 //   node scripts/gh.mjs pr-create --title "feat: ..." --body-file /tmp/body.md [--draft]
 //   node scripts/gh.mjs pr-list                       열린 PR + 각 PR 의 CI 상태
 //   node scripts/gh.mjs pr-status [<번호>]             체크 결과 + 네이티브 변경 여부 + 프리뷰 (번호 없으면 현재 브랜치)
-//   node scripts/gh.mjs pr-watch [<번호>]              체크와 PR 리뷰(종합 코멘트)가 끝날 때까지 기다린 뒤 pr-status
+//   node scripts/gh.mjs pr-watch [<번호>]              체크가 끝날 때까지 기다린 뒤 pr-status
 //   node scripts/gh.mjs deploys                       최근 스테이징 배포·출시·롤백 실행 결과
-//   node scripts/gh.mjs risk-history [--limit 20]     merge 된 PR 의 Risk 등급과 배포 결과 (점수 보정용)
 //   node scripts/gh.mjs dispatch <workflow.yml> [key=value ...]
 //       스테이징 올리기: dispatch deploy.yml [e2e=auto|always|skip] [force=true]
 //       브랜치에서 e2e 만: dispatch e2e.yml --ref <브랜치> [apk_from=<앞 실행 번호>]
@@ -17,6 +16,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
+
+import { MARKER as PREVIEW_MARKER, parsePreview } from './preview-comment.mjs';
 
 function gh(args, { input } = {}) {
   return execFileSync('gh', args, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -58,19 +59,10 @@ function statuses(R, sha) {
   return list.map((s) => ({ name: s.context, status: s.state === 'pending' ? 'in_progress' : 'completed', conclusion: s.state, description: s.description }));
 }
 
-/** pr-review.yml 이 남긴 PR 종합 코멘트에서 Risk 평가를 꺼낸다. */
-function riskSummary(R, number) {
+function previewComment(R, number) {
   const comments = api(`repos/${R}/issues/${number}/comments?per_page=100`);
-  const summary = comments.findLast((c) => c.user?.login === 'github-actions[bot]' && c.body.startsWith('<!-- pr-summary -->'));
-  if (!summary) return null;
-  const m = summary.body.match(/<!-- risk-data:([A-Za-z0-9+/=]+) -->/);
-  let data = null;
-  try {
-    data = m ? JSON.parse(Buffer.from(m[1], 'base64').toString('utf8')) : null;
-  } catch {
-    data = null;
-  }
-  return { url: summary.html_url, headline: summary.body.split('\n')[1]?.replace(/^## /, '') ?? '', data };
+  const c = comments.findLast((x) => x.user?.login === 'github-actions[bot]' && x.body.startsWith(PREVIEW_MARKER));
+  return c ? { url: c.html_url, ...parsePreview(c.body) } : null;
 }
 
 function prStatus(R, number) {
@@ -80,22 +72,17 @@ function prStatus(R, number) {
   for (const c of [...checks(R, pr.head.sha), ...statuses(R, pr.head.sha)]) {
     console.log(`  ${icon(c)} ${c.name} — ${c.description ?? c.conclusion ?? c.status}`);
   }
-  const risk = riskSummary(R, number);
-  if (!risk) {
-    console.log('\nPR 종합 코멘트(리뷰 · Risk) 아직 없음 — CI 가 끝나면 붙습니다.');
+  const preview = previewComment(R, number);
+  if (!preview) {
+    console.log('\n프리뷰 코멘트 없음 — 앱에 영향이 없는 PR(문서·도구·테스트·DB)이거나 preview job 이 아직 돌지 않았습니다.');
     return;
   }
-  console.log(`\n${risk.headline}`);
-  const a = risk.data?.assessment;
-  if (a) {
-    if (a.sha !== pr.head.sha) console.log(`  (주의: ${a.sha.slice(0, 7)} 기준 평가 — 최신 커밋은 평가 대기 중)`);
-    const ci = risk.data?.ci;
-    if (ci?.native) console.log(`  네이티브 변경: ${ci.native === 'true' ? `있음 — 새 빌드 필요 (${(ci.nativeSources ?? []).slice(0, 5).join(', ')})` : '없음 — OTA 가능'}`);
-    if (ci?.webUrl) console.log(`  웹 프리뷰: ${ci.webUrl}`);
-    if (ci?.updateUrl) console.log(`  앱 프리뷰(개발 빌드 QR): ${ci.updateUrl}`);
-    for (const f of a.review?.findings ?? []) console.log(`  - [${f.severity}] ${f.location} ${f.issue}`);
-  }
-  console.log(`  ${risk.url}`);
+  if (preview.sha && !pr.head.sha.startsWith(preview.sha)) console.log(`\n(주의: 프리뷰는 ${preview.sha} 기준 — 최신 커밋은 아직)`);
+  if (preview.native) console.log(`\n네이티브 변경: ${preview.native === 'true' ? '있음 — 새 빌드 필요' : '없음 — OTA 가능'}`);
+  if (preview.webUrl) console.log(`웹 프리뷰: ${preview.webUrl}`);
+  if (preview.updateUrl) console.log(`앱 프리뷰(개발 빌드 QR): ${preview.updateUrl}`);
+  if (preview.pending) console.log('프리뷰 준비 중');
+  console.log(preview.url);
 }
 
 const [command, ...rest] = process.argv.slice(2);
@@ -127,8 +114,7 @@ try {
       const prs = api(`repos/${R}/pulls?state=open&per_page=50`);
       if (!prs.length) console.log('열린 PR 없음');
       for (const pr of prs) {
-        const risk = pr.labels.map((l) => l.name).find((n) => n.startsWith('risk:')) ?? 'risk:평가 전';
-        console.log(`#${pr.number} ${pr.title}${pr.draft ? ' (draft)' : ''} — ${risk} — ${summarizeChecks([...checks(R, pr.head.sha), ...statuses(R, pr.head.sha)])}`);
+        console.log(`#${pr.number} ${pr.title}${pr.draft ? ' (draft)' : ''} — ${summarizeChecks([...checks(R, pr.head.sha), ...statuses(R, pr.head.sha)])}`);
         console.log(`   ${pr.html_url}`);
       }
       break;
@@ -139,29 +125,11 @@ try {
     case 'pr-watch': {
       const number = positional[0] ?? currentPr(R);
       const deadline = Date.now() + 30 * 60_000;
-      let checksDoneAt = null;
       for (;;) {
         const { head } = api(`repos/${R}/pulls/${number}`);
         const list = [...checks(R, head.sha), ...statuses(R, head.sha)];
         const pending = list.filter((c) => c.status !== 'completed').map((c) => c.name);
-        // PR 리뷰(pr-review.yml)는 CI 가 끝난 뒤 따로 돌아 이 커밋의 체크로 붙지 않는다.
-        // 이 커밋을 평가한 종합 코멘트가 갱신될 때까지 기다린다.
-        if (list.length && !pending.length) {
-          if (riskSummary(R, number)?.data?.assessment?.sha === head.sha) break;
-          // PR 리뷰는 CI 가 취소되면 돌지 않는다. 체크가 끝난 뒤 15분이 지나도 안 붙으면 실패한 것으로 본다.
-          if (list.some((c) => c.conclusion === 'cancelled')) {
-            console.log('CI 가 취소돼 PR 리뷰는 돌지 않습니다(새 커밋의 CI 가 끝나면 붙습니다).');
-            break;
-          }
-          checksDoneAt ??= Date.now();
-          if (Date.now() - checksDoneAt > 15 * 60_000) {
-            console.log('체크가 끝난 지 15분이 지나도 PR 리뷰 코멘트가 없습니다 — Actions → PR review 실행을 확인하세요.');
-            break;
-          }
-          pending.push('PR 리뷰');
-        } else {
-          checksDoneAt = null;
-        }
+        if (list.length && !pending.length) break;
         if (Date.now() > deadline) {
           console.log('30분이 지나 기다리기를 멈춥니다.');
           break;
@@ -194,22 +162,6 @@ try {
       if (!all.length) console.log('배포 기록 없음');
       break;
     }
-    case 'risk-history': {
-      // 점수 보정용: merge 된 PR 의 등급과 그 배포가 어떻게 끝났는지 나란히 본다.
-      const limit = Number(flags.limit ?? 20);
-      const prs = api(`repos/${R}/pulls?state=closed&sort=updated&direction=desc&per_page=${Math.min(limit * 2, 100)}`)
-        .filter((p) => p.merged_at)
-        .slice(0, limit);
-      for (const pr of prs) {
-        const risk = pr.labels.map((l) => l.name).find((n) => n.startsWith('risk:')) ?? 'risk:?';
-        const comments = api(`repos/${R}/issues/${pr.number}/comments?per_page=100`);
-        // deploy.yml 이 merge 된 PR 에 남기는 코멘트: 📦 스테이징 OTA · 🧱 스테이징 빌드 · ❌ 실패 · ⏭️ 건너뜀
-        const deploy = comments.findLast((c) => /^(📦|🧱|❌|⏭️)/u.test(c.body))?.body.match(/^\p{Extended_Pictographic}\uFE0F?/u)?.[0] ?? '—';
-        console.log(`${pr.merged_at.slice(0, 10)} #${pr.number} ${risk.padEnd(15)} 배포 ${deploy}  ${pr.title}`);
-      }
-      if (!prs.length) console.log('merge 된 PR 없음');
-      break;
-    }
     case 'dispatch': {
       const [workflow, ...pairs] = positional;
       if (!workflow) throw new Error('usage: dispatch <workflow.yml> [key=value ...]');
@@ -220,7 +172,7 @@ try {
       break;
     }
     default:
-      console.log('명령: pr-create | pr-list | pr-status | pr-watch | deploys | risk-history | dispatch');
+      console.log('명령: pr-create | pr-list | pr-status | pr-watch | deploys | dispatch');
       process.exitCode = command ? 1 : 0;
   }
 } catch (error) {

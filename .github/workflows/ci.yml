@@ -8,9 +8,8 @@ name: CI
 #   preview      웹 프리뷰(EAS Hosting) + 앱 프리뷰(EAS Update, branch pr-<n>) → PR 코멘트
 #   autofix      위 중 하나라도 실패하면 Claude 가 로그를 읽고 고쳐서 push
 #
-# 이 실행이 끝나면 pr-review.yml(workflow_run) 이 main 의 코드로 AI 리뷰 + Risk Score 를 내고
-# PR 종합 코멘트를 갱신한다(merge 를 막지는 않는다). 리뷰를 이 파일에 두지 않는 이유:
-# 이 파일은 PR 의 버전이 실행되므로, PR 이 자기 평가 방식을 바꿀 수 있게 된다.
+# CI 뒤의 AI 리뷰·Risk Score(pr-review.yml)는 2026-11-19 제거했다 — 리뷰와 Risk 평가는 push 전 세션이 하고
+# PR 본문에 쓴다(CLAUDE.md, docs/decisions.md).
 #
 # Actions 시간 아끼기(무료 사용량은 계정의 모든 비공개 리포지토리가 나눠 쓴다):
 #   - 문서만 바뀐 PR(scripts/ci-changes.mjs): test 는 성공으로 바로 끝나고 나머지는 건너뛴다.
@@ -130,7 +129,7 @@ jobs:
         run: npm ci
 
       # 네이티브 변경 판정. base(merge-base)를 별도 작업 트리에 두고 플랫폼별 runtimeVersion(fingerprint)을 비교한다.
-      # 다르면 이 PR 은 OTA 로 나갈 수 없다(새 빌드·스토어 심사). 결과는 프리뷰·Risk Score(pr-review.yml)가 쓴다.
+      # 다르면 이 PR 은 OTA 로 나갈 수 없다(새 빌드·스토어 심사). 결과는 프리뷰 코멘트가 쓴다.
       # lockfile 이 같으면 base 의 npm ci 결과도 같으므로 head 의 node_modules 를 하드링크로 복사한다(몇 초, 디스크를 더 쓰지 않음 —
       # npm ci / --ignore-scripts / 하드링크 세 방식의 fingerprint 가 같음을 2026-11-19 확인). 다르면 base 에서 npm ci.
       # 뒤 검사가 실패해도 판정이 남도록 설치 바로 뒤에 둔다.
@@ -162,14 +161,6 @@ jobs:
           else
             echo "### ⚡ 네이티브 변경 없음 — OTA 로 배포 가능" >> "$GITHUB_STEP_SUMMARY"
           fi
-
-      # pr-review.yml 이 ci-meta-* 를 내려받아 Risk Score 에 쓴다.
-      - uses: actions/upload-artifact@v7
-        if: always() && steps.fingerprint.outcome == 'success'
-        with:
-          name: ci-meta-native
-          path: ci-meta/fingerprint.json
-          retention-days: 7
 
       - name: Lint
         if: steps.scope.outputs.code == 'true'
@@ -370,25 +361,6 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node scripts/preview-comment.mjs result
 
-      # pr-review.yml 이 PR 종합 코멘트에 쓸 값. 비밀값은 넣지 않는다.
-      - name: Record preview result
-        if: always() && steps.guard.outputs.ready == 'true'
-        env:
-          WEB: ${{ steps.web.outcome }}
-          WEB_URL: ${{ steps.web.outputs.web_url }}
-          UPDATE: ${{ steps.update.outcome }}
-          UPDATE_URL: ${{ steps.update.outputs.update_url }}
-        run: |
-          mkdir -p ci-meta
-          node -e 'const e=process.env;require("fs").writeFileSync("ci-meta/preview.json",JSON.stringify({web:e.WEB||null,web_url:e.WEB_URL||null,update:e.UPDATE||null,update_url:e.UPDATE_URL||null,finished_at:new Date().toISOString()}))'
-
-      - uses: actions/upload-artifact@v7
-        if: always() && steps.guard.outputs.ready == 'true'
-        with:
-          name: ci-meta-preview
-          path: ci-meta/preview.json
-          retention-days: 7
-
   # ---------------------------------------------------------------------------
   # CI 실패 → Claude 가 로그를 읽고 고쳐서 PR 브랜치에 push.
   # Dependabot PR 은 제외한다(시크릿이 없어 돌지 못하고, 의존성 호환 문제는 사람이 판단할 일이다).
@@ -510,7 +482,7 @@ jobs:
             - RLS 테스트가 실패하면 정책을 넓혀서 통과시키지 않는다. 정책이 의도대로 막는지가 테스트의 목적이다.
             - `.github/`(워크플로·리스크 규칙)와 `scripts/risk/` 는 고치지 않는다. 원인이 거기 있으면
               push 하지 말고 코멘트로 알린다.
-            - 라벨(특히 `risk:*`), PR 본문, 리뷰 상태는 건드리지 않는다.
+            - 라벨, PR 본문, 리뷰 상태는 건드리지 않는다.
             - EAS·Supabase 인증·한도·장애처럼 코드로 고칠 수 없는 원인이거나, 원인이 확실하지 않거나,
               제품 동작을 바꿔야만 고쳐지는 경우에는 **push 하지 말고** 무엇이 막혔는지 코멘트만 남긴다.
 

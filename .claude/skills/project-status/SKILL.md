@@ -1,6 +1,6 @@
 ---
 name: project-status
-description: 사용자가 이 앱 프로젝트의 개발 상황·"어디까지 됐어?"·"PR 어떻게 됐어?"·스테이징/출시 상태·롤아웃·Risk 를 물을 때 사용한다. 열린 PR(CI·리뷰·Risk·네이티브 여부), 스테이징 배포·출시·롤백, 미결 결정을 모아 짧게 보고한다.
+description: 사용자가 이 앱 프로젝트의 개발 상황·"어디까지 됐어?"·"PR 어떻게 됐어?"·스테이징/출시 상태·롤아웃·Risk 를 물을 때 사용한다. 열린 PR(CI·예상 Risk·네이티브 여부), 스테이징 배포·출시·롤백, 미결 결정을 모아 짧게 보고한다.
 ---
 
 # 개발 현황 보고
@@ -13,8 +13,9 @@ description: 사용자가 이 앱 프로젝트의 개발 상황·"어디까지 �
 
 ```bash
 git fetch origin main --quiet
-node scripts/gh.mjs pr-list          # 열린 PR + Risk 라벨 + 체크
-node scripts/gh.mjs pr-status <번호>  # 체크 상세 + 네이티브 변경 여부 + 프리뷰 + 종합 코멘트(Risk·리뷰·발견 사항)
+node scripts/gh.mjs pr-list          # 열린 PR + 체크
+node scripts/gh.mjs pr-status <번호>  # 체크 상세 + 네이티브 변경 여부 + 프리뷰
+# 예상 Risk 는 PR 본문의 "예상 Risk" 칸(세션의 자기 평가)에서 읽는다: gh api repos/{owner}/{repo}/pulls/<번호> --jq .body
 node scripts/gh.mjs deploys          # 최근 스테이징 배포·출시·롤백 실행
 git log origin/main --oneline -10    # 최근 merge
 gh issue list --search "롤아웃 자동 중단" --state open   # rollout-monitor 가 연 사고 이슈 (REST 실패 시 생략)
@@ -31,8 +32,8 @@ gh issue list --search "롤아웃 자동 중단" --state open   # rollout-monito
 ```
 **요약** 한 줄 (예: PR 2개 중 1개 merge 가능, 스테이징 정상, production OTA 50% 롤아웃 중)
 
-**merge 가능** — #12 단어장 화면: 🟡 MEDIUM 28 · ⚡ OTA · 리뷰 ✅ · 웹 프리뷰 <링크>
-**조치 필요** — #13 카메라 업로드: 🟠 HIGH 52 · 🧱 새 빌드 필요 · 리뷰 ✋ (권한 문구 1건) · 롤백 계획 빠짐
+**merge 가능** — #12 단어장 화면: 예상 🟡 MEDIUM · ⚡ OTA · CI ✅ · 웹 프리뷰 <링크>
+**조치 필요** — #13 카메라 업로드: 예상 🟠 HIGH · 🧱 새 빌드 필요 · CI ❌ · 롤백 계획 빠짐
 **진행 중** — #14 …: CI ❌ auto-fix 2/3
 **스테이징** — 10/5 #11 📦 OTA ✅ (폰에서 확인했나요?)
 **출시** — 10/3 OTA 10% → 10/4 50% (rollout-monitor) / 스토어 1.1.0 심사 중
@@ -44,5 +45,5 @@ gh issue list --search "롤아웃 자동 중단" --state open   # rollout-monito
 - 사용자가 할 일(merge, 폰 확인, 출시 지시, CRITICAL 판단, 스토어 콘솔 버튼, 계정·키)은 굵게 표시한다.
 - 롤아웃 자동 중단·스테이징 실패·CRITICAL PR 은 맨 위에 올린다.
 - 🧱 네이티브 변경 PR 은 "스테이징을 올리면 e2e 가 돌고 새 빌드를 설치해야 하며, 출시는 스토어 심사를 거친다" 를 한 번 상기시킨다.
-- Risk 점수는 숫자만 전하지 말고 가장 큰 위험 요인 한 가지를 같이 적는다.
+- 예상 Risk 는 등급만 전하지 말고 PR 본문에 적힌 가장 큰 위험 요인 한 가지를 같이 적는다.
 - 추측하지 않는다. 확인 못 한 항목은 "확인 못 함" 이라고 쓴다.
