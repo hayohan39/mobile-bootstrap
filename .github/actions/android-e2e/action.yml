@@ -49,13 +49,25 @@ runs:
         DIR: ${{ runner.temp }}/e2e-apk
         DOWNLOADED: ${{ steps.download.outcome }}
         FROM: ${{ inputs.apk-from }}
+        GH_TOKEN: ${{ inputs.github-token }}
       run: |
         if [ "$DOWNLOADED" != success ] || [ ! -f "$DIR/app-release.apk" ] || [ ! -f "$DIR/sha" ]; then
           echo "reuse=false" >> "$GITHUB_OUTPUT"
           echo "::warning title=APK 재사용 안 함::실행 $FROM 의 e2e-apk 아티팩트가 없습니다(7일이 지났거나 빌드 전에 실패) — 새로 빌드합니다."
           exit 0
         fi
-        node scripts/e2e-apk.mjs check --from "$(head -c 40 "$DIR/sha")"
+        # 아티팩트 안의 sha 만 믿지 않는다: 그 실행이 실제로 체크아웃한 커밋(head_sha)과 같아야 한다.
+        # 리뷰되지 않은 브랜치에서 만든 APK 는 그 브랜치 커밋이라 아래 조상 검사(main 의 조상인가)에서 걸린다.
+        run_sha=""
+        if [[ "$FROM" =~ ^[0-9]+$ ]]; then
+          run_sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$FROM" --jq .head_sha 2>/dev/null || true)
+        fi
+        if [ -z "$run_sha" ] || [ "$run_sha" != "$(head -c 40 "$DIR/sha")" ]; then
+          echo "reuse=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=APK 재사용 안 함::실행 $FROM 의 커밋과 APK 의 커밋이 맞지 않습니다 — 새로 빌드합니다."
+          exit 0
+        fi
+        node scripts/e2e-apk.mjs check --from "$run_sha"
         if grep -q '^reuse=true' "$GITHUB_OUTPUT"; then
           echo "### ♻️ APK 재사용 — 실행 $FROM 의 APK 로 흐름만 돌립니다" >> "$GITHUB_STEP_SUMMARY"
         else

@@ -53,6 +53,11 @@ describe("e2e-apk canReuse", () => {
     r3.commit("build recipe");
     expect(canReuse(r3.apk, "HEAD", r3.dir).reuse).toBe(false);
 
+    const r4 = repo();
+    r4.write(".github/workflows/deploy.yml", "env: {}\n");
+    r4.commit("e2e env");
+    expect(canReuse(r4.apk, "HEAD", r4.dir).reuse).toBe(false);
+
     const r2 = repo();
     r2.write("app.json", "{}\n");
     r2.commit("config");

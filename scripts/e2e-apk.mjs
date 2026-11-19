@@ -8,7 +8,8 @@
 //   1. APK 의 커밋이 지금 커밋의 조상(또는 같은 커밋)이다 — 다른 브랜치의 APK 가 아니다.
 //   2. 그 사이에 앱(번들·네이티브·앱 설정)에 들어가는 파일이 바뀌지 않았다 — scripts/ci-changes.mjs 의 app 판정.
 //      .maestro/·테스트·문서·도구만 바뀌었으면 APK 안의 앱은 지금 코드와 같다.
-//      단 APK 를 만드는 방법(.github/actions/android-e2e/)이 바뀌었으면 그 빌드를 확인해야 하므로 새로 빌드한다.
+//      단 APK 를 만드는 방법(.github/actions/android-e2e/)이나 빌드에 env 를 넣는 워크플로(e2e.yml·deploy.yml)가 바뀌었으면
+//      그 빌드를 확인해야 하므로 새로 빌드한다.
 // GitHub Actions 에서는 $GITHUB_OUTPUT 에도 쓴다.
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -19,6 +20,8 @@ import { fileURLToPath } from 'node:url';
 import { affectsApp, changedFiles } from './ci-changes.mjs';
 
 const SHA = /^[0-9a-f]{40}$/;
+// APK 를 만드는 방법 — 바뀌면 재사용하지 않는다.
+const BUILD_RECIPE = [/^\.github\/actions\/android-e2e\//, /^\.github\/workflows\/(e2e|deploy)\.yml$/];
 
 /** @returns {{ reuse: boolean, reason: string }} */
 export function canReuse(from, head = 'HEAD', cwd = process.cwd()) {
@@ -28,7 +31,7 @@ export function canReuse(from, head = 'HEAD', cwd = process.cwd()) {
   } catch {
     return { reuse: false, reason: `APK 의 커밋 ${from.slice(0, 7)} 이 지금 커밋의 조상이 아닙니다(다른 브랜치이거나 히스토리가 없음)` };
   }
-  const app = changedFiles(from, head, cwd).filter((f) => affectsApp(f) || f.startsWith('.github/actions/android-e2e/'));
+  const app = changedFiles(from, head, cwd).filter((f) => affectsApp(f) || BUILD_RECIPE.some((re) => re.test(f)));
   if (app.length > 0) {
     const shown = app.slice(0, 5).join(', ') + (app.length > 5 ? ` 외 ${app.length - 5}개` : '');
     return { reuse: false, reason: `APK 이후 앱 파일이 바뀌었습니다: ${shown}` };
