@@ -29,6 +29,10 @@ on:
         description: "바뀐 것이 문서뿐이어도 배포"
         type: boolean
         default: false
+      e2e_apk_from:
+        description: "e2e 가 흐름 문제로 실패해 .maestro/ 만 고쳤을 때, 그 실행 번호(run id) — APK 를 다시 써서 빌드를 건너뜀"
+        type: string
+        default: ""
 
 concurrency:
   group: deploy-staging
@@ -160,10 +164,15 @@ jobs:
       && (inputs.e2e == 'always' || (inputs.e2e != 'skip' && needs.plan.outputs.native == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    permissions:
+      contents: read
+      actions: read # e2e_apk_from 실행의 APK 아티팩트 받기
     env:
       EXPO_PUBLIC_COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # APK 재사용 판정(scripts/e2e-apk.mjs)이 APK 커밋과 비교한다
 
       - uses: actions/setup-node@v7
         with:
@@ -185,6 +194,8 @@ jobs:
         run: npm ci
 
       - uses: ./.github/actions/android-e2e
+        with:
+          apk-from: ${{ inputs.e2e_apk_from }}
 
   database:
     needs: [plan, check, e2e]

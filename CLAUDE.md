@@ -101,6 +101,8 @@ merge 된 PR 들을 모아 스테이징 앱에 올린다. merge 만으로는 스
 2. `node scripts/gh.mjs dispatch deploy.yml` (e2e 는 네이티브가 바뀌었을 때만 자동. 강제 `e2e=always`, 생략 `e2e=skip`)
    → main 전체 검사 → (네이티브 변경이면) Android 에뮬레이터 e2e 20~60분 → DB 마이그레이션 → OTA 또는 새 스테이징 빌드
    → 이번 스테이징에 들어간 PR 들에 결과 코멘트.
+   e2e 가 **흐름(`.maestro/`) 문제**로 실패해 흐름만 고쳤으면, 다시 올릴 때 `e2e_apk_from=<실패한 실행 번호>` 를 주면 그 APK 를
+   다시 써서 빌드(약 23분)를 건너뛴다. 그 사이 앱 파일이 바뀌었으면 자동으로 새로 빌드한다(`scripts/e2e-apk.mjs`).
    check 가 **Expo 패치 버전**(`expo install --check`)에서 막히면 — PR CI 에서는 경고만 남기는 검사다 — CI 로그의 기대 버전으로
    올리는 네이티브 PR 을 먼저 내고, merge 뒤 다시 스테이징을 올린다(세션은 expo.dev 에 못 갈 수 있어 `npm install <pkg>@~<버전>`).
 3. 끝나면(`gh run list --workflow deploy.yml --limit 1` 또는 `deploys`) 두세 줄로 보고한다: OTA 인지 새 빌드(폰에 설치 필요)인지,

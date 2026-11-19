@@ -3,11 +3,69 @@ description: >-
   Android release APK 를 러너에서 빌드하고 에뮬레이터에서 Maestro 흐름(.maestro/)을 돌린다 — 빌드가 되고, 켜자마자 죽지 않는지.
   deploy.yml 의 스테이징이 쓴다(네이티브가 바뀌었을 때, 또는 e2e=always).
   부르는 쪽이 checkout · setup-node · npm ci 를 먼저 한다. EAS 를 쓰지 않는다(EAS 무료 빌드 한도 보존).
+  APK 를 다시 쓰려면 부르는 쪽 checkout 이 fetch-depth 0 이고 job 에 actions: read 권한이 있어야 한다.
+
+# 한 번(약 30분) 중 APK 빌드가 약 23분이다(2026-11-15 fullset 스테이징). 그래서:
+#   - 빌드한 APK 를 아티팩트(e2e-apk, 7일)로 남기고, apk-from 에 그 실행 번호를 주면 빌드를 건너뛴다.
+#     흐름(.maestro/)만 고쳐 다시 돌릴 때 30분 → 약 5분. 그 사이 앱 파일이 바뀌었으면(scripts/e2e-apk.mjs) 경고하고 새로 빌드한다.
+#   - Gradle 캐시는 lockfile 이 바뀌어도 가장 최근 캐시를 복원한다(전에는 setup-java 의 lockfile 키라 네이티브가 바뀔 때마다 miss).
+#     빌드 캐시(org.gradle.caching)도 켜서 바뀌지 않은 모듈의 Kotlin·Java 컴파일 결과를 다시 쓴다.
+#     빌드가 성공하면 Maestro 결과와 상관없이 바로 저장한다(실패한 e2e 를 다시 돌릴 때도 캐시가 있게).
+inputs:
+  apk-from:
+    description: 다시 쓸 APK 를 만든 Actions 실행 번호(run id). 비우면 새로 빌드한다.
+    required: false
+    default: ""
+  github-token:
+    description: "다른 실행의 아티팩트를 받을 토큰(actions: read 권한)"
+    required: false
+    default: ${{ github.token }}
+
 runs:
   using: composite
   steps:
+    - name: App id
+      id: app
+      shell: bash
+      run: echo "app_id=$(node -p 'require("./app.json").expo.android.package')" >> "$GITHUB_OUTPUT"
+
+    # ---- APK 재사용 ----
+    - name: Download the earlier APK
+      id: download
+      if: inputs.apk-from != ''
+      continue-on-error: true
+      uses: actions/download-artifact@v8
+      with:
+        name: e2e-apk
+        path: ${{ runner.temp }}/e2e-apk
+        run-id: ${{ inputs.apk-from }}
+        github-token: ${{ inputs.github-token }}
+
+    - name: Can the APK be reused
+      id: reuse
+      if: inputs.apk-from != ''
+      shell: bash
+      env:
+        DIR: ${{ runner.temp }}/e2e-apk
+        DOWNLOADED: ${{ steps.download.outcome }}
+        FROM: ${{ inputs.apk-from }}
+      run: |
+        if [ "$DOWNLOADED" != success ] || [ ! -f "$DIR/app-release.apk" ] || [ ! -f "$DIR/sha" ]; then
+          echo "reuse=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=APK 재사용 안 함::실행 $FROM 의 e2e-apk 아티팩트가 없습니다(7일이 지났거나 빌드 전에 실패) — 새로 빌드합니다."
+          exit 0
+        fi
+        node scripts/e2e-apk.mjs check --from "$(head -c 40 "$DIR/sha")"
+        if grep -q '^reuse=true' "$GITHUB_OUTPUT"; then
+          echo "### ♻️ APK 재사용 — 실행 $FROM 의 APK 로 흐름만 돌립니다" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "::warning title=APK 재사용 안 함::$(grep '^reason=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2-) — 새로 빌드합니다."
+        fi
+
+    # ---- 새로 빌드 ----
     # 기본 러너 디스크로는 Android 빌드 + 에뮬레이터 이미지가 들어가지 않는다. 쓰지 않는 도구를 지운다.
     - name: Free disk space
+      if: steps.reuse.outputs.reuse != 'true'
       shell: bash
       run: |
         df -h /
@@ -15,16 +73,27 @@ runs:
           /opt/hostedtoolcache/CodeQL /usr/share/swift /usr/local/share/powershell /usr/local/julia*
         df -h /
 
-    # android/ 는 prebuild 가 만들므로 gradle 파일 대신 package-lock.json(네이티브 의존성)으로 캐시 키를 만든다.
     - uses: actions/setup-java@v6
+      if: steps.reuse.outputs.reuse != 'true'
       with:
         distribution: temurin
         java-version: "17"
-        cache: gradle
-        cache-dependency-path: package-lock.json
+
+    # android/ 는 prebuild 가 만들므로 네이티브 의존성(package-lock.json)으로 키를 만들고, 다르면 가장 최근 것을 복원한다.
+    - name: Restore Gradle cache
+      id: gradle
+      if: steps.reuse.outputs.reuse != 'true'
+      uses: actions/cache/restore@v6
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+        restore-keys: gradle-${{ runner.os }}-
 
     - name: Build release APK
-      id: apk
+      id: build
+      if: steps.reuse.outputs.reuse != 'true'
       shell: bash
       env:
         # 이 APK 는 에뮬레이터 검사용이라 Sentry 소스맵을 올리지 않는다(토큰이 없으면 빌드가 실패한다).
@@ -34,14 +103,52 @@ runs:
         # 기본값(힙 2GB·Metaspace 512MB)으로는 Metaspace 가 모자라 빌드가 멈춘다.
         # 너무 크게 잡으면 Kotlin 데몬·워커까지 합쳐 러너(16GB)가 메모리 부족으로 꺼진다.
         sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1536m/' android/gradle.properties
-        printf '\nkotlin.daemon.jvmargs=-Xmx2g\norg.gradle.workers.max=3\n' >> android/gradle.properties
+        printf '\nkotlin.daemon.jvmargs=-Xmx2g\norg.gradle.workers.max=3\norg.gradle.caching=true\n' >> android/gradle.properties
         # 에뮬레이터 검사용 APK 라 release lint 는 끈다(스토어 빌드는 EAS 가 따로 한다).
         printf '\nandroid { lint { checkReleaseBuilds = false } }\n' >> android/app/build.gradle
         # 에뮬레이터(x86_64) 아키텍처만 빌드한다.
         (cd android && ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=x86_64)
         df -h / && free -g
-        echo "app_id=$(node -p 'require("./app.json").expo.android.package')" >> "$GITHUB_OUTPUT"
 
+    - name: Save Gradle cache
+      if: steps.build.outcome == 'success' && steps.gradle.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+    # 흐름만 고쳐 다시 돌릴 때 쓰도록 남긴다(apk-from). 어느 커밋으로 만든 APK 인지 함께 적는다.
+    - name: Keep the APK for reruns
+      id: keep
+      if: steps.build.outcome == 'success'
+      shell: bash
+      env:
+        DIR: ${{ runner.temp }}/e2e-apk
+        SHA: ${{ github.sha }}
+      run: |
+        mkdir -p "$DIR"
+        cp android/app/build/outputs/apk/release/app-release.apk "$DIR/"
+        printf '%s' "$SHA" > "$DIR/sha"
+
+    - uses: actions/upload-artifact@v7
+      if: steps.build.outcome == 'success'
+      with:
+        name: e2e-apk
+        path: ${{ runner.temp }}/e2e-apk/
+        retention-days: 7
+
+    - name: APK to test
+      id: apk
+      shell: bash
+      env:
+        DIR: ${{ runner.temp }}/e2e-apk
+      run: |
+        echo "path=$DIR/app-release.apk" >> "$GITHUB_OUTPUT"
+        echo "다시 쓰려면: apk-from 에 실행 번호 $GITHUB_RUN_ID (e2e.yml 은 apk_from, deploy.yml 은 e2e_apk_from)"
+
+    # ---- 에뮬레이터 ----
     - name: Enable KVM
       shell: bash
       run: |
@@ -64,7 +171,7 @@ runs:
         disable-animations: true
         # 실패하면 그 순간의 화면 요소(resource-id·텍스트)와 앱 로그를 job 로그에 남긴다 — 아티팩트 없이도 원인을 본다.
         # (emulator-runner 는 script 를 줄마다 따로 실행하므로 한 줄로 쓴다)
-        script: adb install -r android/app/build/outputs/apk/release/app-release.apk && (maestro test -e APP_ID=${{ steps.apk.outputs.app_id }} --format junit --output maestro-report.xml .maestro || (echo "::group::e2e 실패 진단 — 화면 요소(maestro hierarchy)"; maestro hierarchy | grep -E '"(text|resource-id|accessibilityText|bounds)"' | grep -vE '"",?$' | head -n 400; echo "::endgroup::"; echo "::group::e2e 실패 진단 — 앱 로그(logcat)"; adb logcat -d -v brief ReactNativeJS:V ReactNative:V AndroidRuntime:E ExpoModulesCore:V expo:V '*:S' | tail -n 300; echo "::endgroup::"; exit 1))
+        script: adb install -r "${{ steps.apk.outputs.path }}" && (maestro test -e APP_ID=${{ steps.app.outputs.app_id }} --format junit --output maestro-report.xml .maestro || (echo "::group::e2e 실패 진단 — 화면 요소(maestro hierarchy)"; maestro hierarchy | grep -E '"(text|resource-id|accessibilityText|bounds)"' | grep -vE '"",?$' | head -n 400; echo "::endgroup::"; echo "::group::e2e 실패 진단 — 앱 로그(logcat)"; adb logcat -d -v brief ReactNativeJS:V ReactNative:V AndroidRuntime:E ExpoModulesCore:V expo:V '*:S' | tail -n 300; echo "::endgroup::"; exit 1))
 
     - uses: actions/upload-artifact@v7
       if: failure()
